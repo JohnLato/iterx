@@ -1,0 +1,30 @@
+name:                iterX
+version:             0.1.0.0
+synopsis:            generators and parsers
+-- description:         
+license:             BSD3
+license-file:        LICENSE
+author:              John W. Lato
+maintainer:          jwlato@gmail.com
+-- copyright:           
+category:            Control
+build-type:          Simple
+-- extra-source-files:  
+cabal-version:       >=1.10
+
+library
+  exposed-modules:     IterX,
+                       IterX.Generators,
+                       IterX.Core,
+                       IterX.Exception,
+                       IterX.IterX,
+                       IterX.ReadableChunk
+  -- other-modules:       
+  build-depends:       base >=4.6 && <4.7,
+                       bytestring >=0.10 && <0.11,
+                       lifted-base >=0.2 && <0.3,
+                       transformers-base >=0.4 && <0.5,
+                       mtl >=2.1 && <2.2,
+                       monad-control >=0.3 && <0.4
+  hs-source-dirs:      src
+  default-language:    Haskell2010
