@@ -6,17 +6,18 @@
 
 {-# OPTIONS -Wall #-}
 module IterX.IterX (
-   ResultX(..)
-  ,IterX(..)
-  ,Failure
-  ,Success
+  ResultX(..)
+, IterX(..)
+, Failure
+, Success
 
-  ,failX
-  ,doneX
+, failX
+, doneX
 
-  ,runIterX
-  ,convStream
-  ,unfoldConvStream
+
+, runIterX
+, convStream
+, unfoldConvStream
 ) where
 
 import           IterX.Core
