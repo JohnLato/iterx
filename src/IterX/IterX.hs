@@ -14,6 +14,7 @@ module IterX.IterX (
 , failX
 , doneX
 
+, feed
 
 , runIterX
 , convStream
@@ -26,6 +27,7 @@ import           IterX.Exception
 import           Control.Applicative
 import           Control.Monad.State
 import           Control.Exception (throw)
+import           Data.Monoid
 
 ----------------------------------------------------------------
 
@@ -107,6 +109,13 @@ runIterX gen i = do
     f (MoreX k) s   = k s
     f (DoneX _ _) _ = throw (TerminateEarly "runIterX")
     f r _ = return r
+
+----------------------------------------------------------------
+
+feed :: (Monad m, Monoid s) => ResultX m s r -> s -> m (ResultX m s r)
+feed (MoreX k)    s = k s
+feed (DoneX r s0) s = return $ DoneX r (s0<>s)
+feed f@FailX{}    _ = return f
 
 ----------------------------------------------------------------
 
