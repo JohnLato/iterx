@@ -18,7 +18,8 @@ library
                        IterX.Core,
                        IterX.Exception,
                        IterX.IterX,
-                       IterX.ReadableChunk
+                       IterX.ReadableChunk,
+                       IterX.StreamTrans
   -- other-modules:       
   build-depends:       base >=4.6 && <4.7,
                        bytestring >=0.10 && <0.11,
