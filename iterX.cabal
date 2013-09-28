@@ -14,6 +14,7 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:     IterX,
+                       IterX.Attoparsec,
                        IterX.Generators,
                        IterX.Core,
                        IterX.Exception,
@@ -22,6 +23,7 @@ library
                        IterX.StreamTrans
   -- other-modules:       
   build-depends:       base >=4.6 && <4.7,
+                       attoparsec >=0.10 && <0.11,
                        bytestring >=0.10 && <0.11,
                        lifted-base >=0.2 && <0.3,
                        transformers-base >=0.4 && <0.5,
