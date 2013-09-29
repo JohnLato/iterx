@@ -19,8 +19,10 @@ library
                        IterX.Core,
                        IterX.Exception,
                        IterX.IterX,
+                       IterX.Parser,
                        IterX.ReadableChunk,
-                       IterX.StreamTrans
+                       IterX.StreamTrans,
+                       IterX.Unsafe
   -- other-modules:       
   build-depends:       base >=4.6 && <4.7,
                        attoparsec >=0.10 && <0.11,
@@ -28,6 +30,8 @@ library
                        lifted-base >=0.2 && <0.3,
                        transformers-base >=0.4 && <0.5,
                        mtl >=2.1 && <2.2,
-                       monad-control >=0.3 && <0.4
+                       monad-control >=0.3 && <0.4,
+                       mono-traversable == 0.1.*,
+                       vector >= 0.10 && < 0.12
   hs-source-dirs:      src
   default-language:    Haskell2010
