@@ -6,6 +6,10 @@
 module IterX.Exception (
    IterException
 
+  ,IException(..)
+  ,iExceptionToException
+  ,iExceptionFromException
+
   ,TerminateEarly(..)
   ,isTerminateEarly
   ,terminateEarlyHandler
