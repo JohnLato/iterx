@@ -6,6 +6,7 @@
 
 module IterX.Parser (
   IterX.Parser.take
+, IterX.Parser.drop
 , match
 
 , tryHead
@@ -122,6 +123,30 @@ take :: (S.Index s ~ Int, IsSequence s, MonoFoldableMonoid s, Monad m)
          => Int -> IterX s m s
 take n = cxtFailure "take" $ takeWith n (const True)
 {-# INLINE take #-}
+
+-- | drop up to @n@ elements of input.  This will not fail.
+drop :: (S.Index s ~ Int, IsSequence s, MonoFoldableMonoid s, Monad m)
+         => Int -> IterX s m ()
+drop n0 = do
+  s <- get
+  let !n' = max n0 0
+      !curlen = olength s
+  if curlen >= n' then let !(_,!t) = unsafeSplitAt n' s in put t
+    else dropLoop n'
+{-# INLINE drop #-}
+
+dropLoop :: (S.Index s ~ Int, IsSequence s, MonoFoldableMonoid s, Monad m)
+         => Int -> IterX s m ()
+dropLoop = loop
+  where
+    loop n = do
+      t <- inputReady
+      if t then do
+          s <- get
+          if olength s >= n then let !(_,!t) = unsafeSplitAt n s in put t
+            else loop n
+        else return ()
+{-# INLINEABLE dropLoop #-}
 
 -- | parse a sequence of elements that exactly matches @s@.
 --
