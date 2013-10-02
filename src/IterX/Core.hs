@@ -13,6 +13,7 @@ module IterX.Core (
 
   ,mapG
   ,mapGM
+  ,mapsG
   ,filterG
   ,foldG
   ,streamG
@@ -64,6 +65,10 @@ unMP unP p = do
 mapG :: Monad m => (e1 -> e2) -> Transducer (GenT e2 m) m e1 e2
 mapG f gen = runGenT gen (yield . f)
 {-# INLINE mapG #-}
+
+mapsG :: Monad m => (e1 -> [e2]) -> Transducer (GenT e2 m) m e1 e2
+mapsG f gen = runGenT gen (mapM_ yield . f)
+{-# INLINE mapsG #-}
 
 mapGM :: Monad m => (e1 -> m e2) -> Transducer (GenT e2 m) m e1 e2
 mapGM f gen = runGenT gen (yield <=< lift . f)
