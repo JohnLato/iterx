@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE TypeFamilies              #-}
 {-# LANGUAGE TupleSections             #-}
 
 {-# OPTIONS -Wall #-}
@@ -24,16 +25,22 @@ module IterX.IterX (
 , unfoldConvStream
 
 , iterXToStreamTrans
+, delimitG
+, delimitN
+, DelState
 ) where
 
 import           IterX.Core
 import           IterX.Exception
 import           IterX.StreamTrans
+import           IterX.Unsafe
 
 import           Control.Applicative
 import           Control.Monad.State
 import           Control.Exception (throw)
+import           Data.MonoTraversable
 import           Data.Monoid
+import           Data.Sequences
 
 ----------------------------------------------------------------
 
@@ -86,9 +93,9 @@ doneX s _ a   = return $ DoneX a s
 
 -- | transform a failure continuation by adding extra context
 cxtFailure :: String -> IterX s m a -> IterX s m a
-cxtFailure cxt i = IterX $ \s st onF onD -> runIter i s st (cxtF onF) onD
-  where
-    cxtF onF s st err = onF s st (cxt ++ ": " ++ err)
+cxtFailure cxt i = IterX $ \s st onF onD ->
+      let cxtF s' st' err = onF s' st' (cxt ++ ": " ++ err)
+      in  runIter i s st cxtF onD
 {-# INLINE cxtFailure #-}
 
 returnIter :: a -> IterX s m a
@@ -186,3 +193,51 @@ iterXToStreamTrans iter = StreamTransM $ \s ->
         MoreX k'    -> return (step k',[])
         FailX _s err -> throw $ IterFailure
             $ "iterXToStreamTrans: " ++ err
+
+-- | create a transducer from a 'delimited stream'.
+delimitG :: Monad m
+         => IterX inp m st
+         -> (st -> inp -> (Either st inp, [outp]))
+         -> Transducer (GenT outp (StateT (DelState inp m st) m)) m inp outp
+delimitG iter0 f = streamGM g s0
+  where
+    s0 = StartDelimiter
+    g st e = case st of
+        ProcState s -> case f s e of
+          (Left s',   outp) -> return (ProcState s', outp)
+          (Right nxt, outp) -> runIter0 outp nxt
+        StartDelimiter     -> runIter0 [] e
+        ConsumeDelimiter k -> k e >>= procResult []
+
+    -- duplicate the main loop of g to keep g non-recursive, and to add the
+    -- extra output threading logic
+    g' outp0 s e = case f s e of
+          (Left s',   outp) -> return (ProcState s', outp0 ++ outp)
+          (Right nxt, outp) -> runIter0 (outp0++outp) nxt
+
+    runIter0 o inp = runIter iter0 inp HasMore failX doneX >>= procResult o
+    procResult outp res = case res of
+              DoneX s' r  -> g' outp s' r
+              MoreX k'    -> return $ (ConsumeDelimiter k', outp)
+              FailX _ err -> throw $ IterFailure $ "delimitG: " ++ err
+{-# INLINEABLE delimitG #-}
+
+type DelState inp m st = DelStateD (inp -> m (ResultX inp m st)) st
+
+data DelStateD i s =
+    StartDelimiter
+  | ConsumeDelimiter !i
+  | ProcState !s
+
+delimitN :: (IsSequence inp, Index inp ~ Int, Monad m)
+         => IterX inp m Int
+         -> Transducer (GenT inp (StateT (DelState inp m Int) m)) m inp inp
+delimitN iter = delimitG iter f
+  where
+    f !n inp =
+      let len = olength inp
+      in if len <= n
+          then (Left $! n-len, [inp])
+          else case unsafeSplitAt n inp of
+            (!h,t) -> (Right t,[h])
+{-# INLINE delimitN #-}
