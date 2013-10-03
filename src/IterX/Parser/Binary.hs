@@ -28,11 +28,11 @@ import Data.Word
 import Data.Word.Word24
 
 packBE :: (Bits b, Num b, MonoFoldable s, Element s ~ Word8) => s -> b
-packBE = ofoldl' (\acc sml -> (acc `shiftL` 1) .|. fromIntegral sml) 0
+packBE = ofoldl' (\acc sml -> (acc `shiftL` 8) .|. fromIntegral sml) 0
 {-# INLINE packBE #-}
 
 packLE :: (Bits b, Num b, MonoFoldable s, Element s ~ Word8) => s -> b
-packLE = ofoldr  (\sml acc -> fromIntegral sml .|. (acc `shiftL` 1)) 0
+packLE = ofoldr  (\sml acc -> fromIntegral sml .|. (acc `shiftL` 8)) 0
 {-# INLINE packLE #-}
 
 getWordn :: forall s m b. (Bits b, Element s ~ Word8, MonoFoldableMonoid s
