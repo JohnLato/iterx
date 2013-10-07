@@ -39,7 +39,7 @@ reqSize' !n0 s st0 onF0 onD0 =
         then onD s st s
         else runIter (forceAppend >> go n) s st onF onD
 -- we don't want this inline'd, but we do want it type-specialized
-{-# INLINEABLE reqSize' #-}
+{-# INLINE reqSize' #-}
 
 reqSize :: (MonoFoldableMonoid s, Monad m) => Int -> IterX s m s
 reqSize !n = IterX $ \s st onF onD ->
@@ -116,7 +116,7 @@ takeWith n0 p = do
   if p h
     then put t >> return h
     else fail "takeWith: predicate failed"
-{-# INLINEABLE takeWith #-}
+{-# INLINE takeWith #-}
 
 -- | consume exactly @n@ elements of input
 take :: (S.Index s ~ Int, IsSequence s, MonoFoldableMonoid s, Monad m)
@@ -146,7 +146,7 @@ dropLoop = loop
           if olength s >= n then let !(_,!t) = unsafeSplitAt n s in put t
             else loop n
         else return ()
-{-# INLINEABLE dropLoop #-}
+{-# INLINE dropLoop #-}
 
 -- | parse a sequence of elements that exactly matches @s@.
 --

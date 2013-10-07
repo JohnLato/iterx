@@ -68,24 +68,20 @@ mapG f gen = runGenT gen (yield . f)
 
 mapsG :: Monad m => (e1 -> [e2]) -> Transducer (GenT e2 m) m e1 e2
 mapsG f gen = runGenT gen (mapM_ yield . f)
-{-# INLINE mapsG #-}
 
 mapGM :: Monad m => (e1 -> m e2) -> Transducer (GenT e2 m) m e1 e2
 mapGM f gen = runGenT gen (yield <=< lift . f)
-{-# INLINE mapGM #-}
 
 filterG :: Monad m => (e -> Bool) -> Transducer m m e e
 filterG p = local f
   where
     f c e | p e = c e
           | otherwise = return ()
-{-# INLINE filterG #-}
 
 foldG :: Monad m => (s -> e -> m s) -> s -> Producer (StateT s m) e -> m s
 foldG f s0 p = execStateT (runGenT p fs) s0
   where
     fs e = get >>= lift . flip f e >>= put
-{-# INLINE foldG #-}
 
 -- Mealy-like
 streamG :: Monad m => (s -> e1 -> (s, [e2])) -> s -> Transducer (GenT e2 (StateT s m)) m e1 e2
@@ -96,7 +92,6 @@ streamG f s0 gen = unStateP (runGenT gen g) s0
         let !(!s', e'm) = f s e
         put s'
         Fold.mapM_ yield e'm
-{-# NOINLINE[1] streamG #-}
 
 -- Mealy-like
 streamGM :: Monad m => (s -> e1 -> m (s, [e2])) -> s -> Transducer (GenT e2 (StateT s m)) m e1 e2
@@ -107,11 +102,9 @@ streamGM f s0 gen = unStateP (runGenT gen g) s0
         !(!s', e'm) <- lift . lift $ f s e
         put s'
         Fold.mapM_ yield e'm
-{-# NOINLINE[2] streamGM #-}
 
 unStateP :: Monad m => Producer (StateT s m) e -> s -> Producer m e
 unStateP p s0 = unMP (flip evalStateT s0) p
-{-# INLINE unStateP #-}
 
 -- | Add an 0-based index to a generated stream.
 indexG :: Monad m => Transducer (GenT (Int,e) (StateT Int m)) m e (Int,e)

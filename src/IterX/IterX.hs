@@ -220,7 +220,7 @@ delimitG iter0 f = streamGM g s0
               DoneX s' r  -> g' outp s' r
               MoreX k'    -> return $ (ConsumeDelimiter k', outp)
               FailX _ err -> throw $ IterFailure $ "delimitG: " ++ err
-{-# INLINEABLE delimitG #-}
+{-# INLINE delimitG #-}
 
 type DelState inp m st = DelStateD (inp -> m (ResultX inp m st)) st
 
@@ -240,4 +240,3 @@ delimitN iter = delimitG iter f
           then (Left $! n-len, [inp])
           else case unsafeSplitAt n inp of
             (!h,t) -> (Right t,[h])
-{-# INLINE delimitN #-}
