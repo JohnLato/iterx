@@ -100,7 +100,7 @@ cxtFailure cxt i = IterX $ \s st onF onD ->
 
 returnIter :: a -> IterX s m a
 returnIter a = IterX $ \s st _ onD -> onD s st a
-{-# NOINLINE returnIter #-}
+{-# INLINE returnIter #-}
 
 bindIter :: IterX s m a -> (a -> IterX s m b) -> IterX s m b
 bindIter m f = IterX $ \s st onF onD -> runIter m s st onF
