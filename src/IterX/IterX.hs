@@ -50,6 +50,11 @@ data ResultX s m r =
   | MoreX (s -> m (ResultX s m r))
     deriving (Functor)
 
+instance (Show s, Show r) => Show (ResultX s m r) where
+    show (DoneX r s) = "DoneX (" ++ show r ++ ") (" ++ show s ++ ")"
+    show (FailX s e) = "FailX (" ++ show s ++ ") (" ++ show e ++ ")"
+    show (MoreX _)   = "MoreX"
+
 data Status = EOF | HasMore
     deriving (Eq, Show)
 
