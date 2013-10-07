@@ -18,7 +18,6 @@ module IterX.Core (
   ,foldG
   ,streamG
   ,streamGM
-  ,unStateP
 
   ,indexG
   ,dropG
@@ -49,16 +48,6 @@ yieldList = mapM_ yield
 -----------------------------------------------------------------
 -- fusion stuff
 
--- this is actually used....
-unMP :: (Monad m, MonadTrans t)
-     => ((t m) () -> m ())
-     -> Producer (t m) e
-     -> Producer m e
-unMP unP p = do
-    env <- ask
-    lift $ unP (runReaderT p (\e -> lift $ env e))
-{-# INLINE unMP #-}
-
 -----------------------------------------------------------------
 -- Transducers
 
@@ -84,34 +73,29 @@ foldG f s0 p = execStateT (runGenT p fs) s0
     fs e = get >>= lift . flip f e >>= put
 
 -- Mealy-like
-streamG :: Monad m => (s -> e1 -> (s, [e2])) -> s -> Transducer (GenT e2 (StateT s m)) m e1 e2
-streamG f s0 gen = unStateP (runGenT gen g) s0
+streamG :: Monad m => (s -> e1 -> (s, [e2])) -> s -> Transducer (StateT s (GenT e2 m)) m e1 e2
+streamG f s0 gen = const () `liftM` foldG f' s0 gen
   where
-    g e = do
-        s <- get
-        let !(!s', e'm) = f s e
-        put s'
-        Fold.mapM_ yield e'm
+    f' s e = case f s e of
+        (!s', es) -> do
+            Fold.mapM_ yield es
+            return s'
 
 -- Mealy-like
-streamGM :: Monad m => (s -> e1 -> m (s, [e2])) -> s -> Transducer (GenT e2 (StateT s m)) m e1 e2
-streamGM f s0 gen = unStateP (runGenT gen g) s0
+streamGM :: Monad m => (s -> e1 -> m (s, [e2])) -> s -> Transducer (StateT s (GenT e2 m)) m e1 e2
+streamGM f s0 gen = const () `liftM` foldG f' s0 gen
   where
-    g e = do
-        s <- get
-        !(!s', e'm) <- lift . lift $ f s e
-        put s'
-        Fold.mapM_ yield e'm
-
-unStateP :: Monad m => Producer (StateT s m) e -> s -> Producer m e
-unStateP p s0 = unMP (flip evalStateT s0) p
+    f' s e = do
+      !(!s',es) <- lift $ f s e
+      Fold.mapM_ yield es
+      return s'
 
 -- | Add an 0-based index to a generated stream.
-indexG :: Monad m => Transducer (GenT (Int,e) (StateT Int m)) m e (Int,e)
+indexG :: Monad m => Transducer (StateT Int (GenT (Int,e) m)) m e (Int,e)
 indexG = streamG (\ix e -> (succ ix,[(ix,e)])) 0
 
 -- | Drop the first 'n' items produced by a 'Generator'.
 dropG :: Monad m
      => Int
-     -> Transducer (GenT (Int,e) (StateT Int (GenT e m))) m e e
+     -> Transducer (StateT Int (GenT (Int,e) (GenT e m))) m e e
 dropG n = mapG snd . filterG ((< n) . fst) . indexG

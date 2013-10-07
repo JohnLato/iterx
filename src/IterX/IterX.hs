@@ -156,7 +156,7 @@ feed f@FailX{}    _ = return f
 -- | Create a 'Transducer' from an 'IterX'
 convStream :: Monad m
            => IterX e1 m e2
-           -> Transducer (GenT e2 (StateT (ResultX e1 m e2) m)) m e1 e2
+           -> Transducer (StateT (ResultX e1 m e2) (GenT e2 m)) m e1 e2
 convStream i = streamGM (f id) i0
   where
     i0 = MoreX $ \inp -> runIter i inp HasMore failX doneX
@@ -171,7 +171,7 @@ convStream i = streamGM (f id) i0
 unfoldConvStream :: Monad m
                  => (st -> IterX e1 m (st,e2))
                  -> st
-                 -> Transducer (GenT e2 (StateT (ResultX e1 m (st,e2)) m)) m
+                 -> Transducer (StateT (ResultX e1 m (st,e2)) (GenT e2 m)) m
                       e1 e2
 unfoldConvStream mkI st0 = streamGM (f id) (i0 st0)
   where
@@ -203,7 +203,7 @@ iterXToStreamTrans iter = StreamTransM $ \s ->
 delimitG :: Monad m
          => IterX inp m st
          -> (st -> inp -> (Either st inp, [outp]))
-         -> Transducer (GenT outp (StateT (DelState inp m st) m)) m inp outp
+         -> Transducer (StateT (DelState inp m st) (GenT outp m)) m inp outp
 delimitG iter0 f = streamGM g s0
   where
     s0 = StartDelimiter
@@ -232,7 +232,7 @@ data DelStateD i s =
 
 delimitN :: (IsSequence inp, Index inp ~ Int, Monad m)
          => IterX inp m Int
-         -> Transducer (GenT inp (StateT (DelState inp m Int) m)) m inp inp
+         -> Transducer (StateT (DelState inp m Int) (GenT inp m)) m inp inp
 delimitN iter = delimitG iter f
   where
     f !n inp =
