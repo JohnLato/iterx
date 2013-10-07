@@ -208,14 +208,10 @@ delimitG iter0 f = streamGM g s0
   where
     s0 = StartDelimiter
     g st e = case st of
-        ProcState s -> case f s e of
-          (Left s',   outp) -> return (ProcState s', outp)
-          (Right nxt, outp) -> runIter0 outp nxt
+        ProcState s -> g' [] s e
         StartDelimiter     -> runIter0 [] e
         ConsumeDelimiter k -> k e >>= procResult []
 
-    -- duplicate the main loop of g to keep g non-recursive, and to add the
-    -- extra output threading logic
     g' outp0 s e = case f s e of
           (Left s',   outp) -> return (ProcState s', outp0 ++ outp)
           (Right nxt, outp) -> runIter0 (outp0++outp) nxt
@@ -225,7 +221,7 @@ delimitG iter0 f = streamGM g s0
               DoneX s' r  -> g' outp s' r
               MoreX k'    -> return $ (ConsumeDelimiter k', outp)
               FailX _ err -> throw $ IterFailure $ "delimitG: " ++ err
-{-# INLINE delimitG #-}
+{-# INLINEABLE delimitG #-}
 
 type DelState inp m st = DelStateD (inp -> m (ResultX inp m st)) st
 
@@ -245,3 +241,4 @@ delimitN iter = delimitG iter f
           then (Left $! n-len, [inp])
           else case unsafeSplitAt n inp of
             (!h,t) -> (Right t,[h])
+{-# INLINEABLE delimitN #-}
