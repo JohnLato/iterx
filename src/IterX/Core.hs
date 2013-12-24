@@ -51,40 +51,59 @@ yieldList = mapM_ yield
 -----------------------------------------------------------------
 -- Transducers
 
+{-# INLINE [1] mapG #-}
 mapG :: Monad m => (e1 -> e2) -> Transducer (GenT e2 m) m e1 e2
 mapG f gen = runGenT gen (yield . f)
-{-# INLINE mapG #-}
+{-# RULES "mapG/mapG" forall f g. mapG f . mapG g = mapG (g . f) . mapG' #-}
 
+mapG' :: Monad m => Transducer (GenT e m) m e e
+mapG' gen = runGenT gen yield
+{-# NOINLINE [0] mapG'#-}
+
+{-# INLINE [1] mapsG #-}
 mapsG :: Monad m => (e1 -> [e2]) -> Transducer (GenT e2 m) m e1 e2
 mapsG f gen = runGenT gen (mapM_ yield . f)
 
 mapGM :: Monad m => (e1 -> m e2) -> Transducer (GenT e2 m) m e1 e2
 mapGM f gen = runGenT gen (yield <=< lift . f)
 
+{-# RULES "mapsG/mapsG" forall f g. mapsG f . mapsG g = mapsG (f >=> g) . mapG' #-}
+{-# RULES "filterG/mapsG" forall f p. filterG p . mapsG f = mapsG (filter p . f) #-}
+{-# RULES "mapsG/filterG" forall f p. mapsG f . filterG p = mapsG (\x -> if p x then f x else []) #-}
+
 filterG :: Monad m => (e -> Bool) -> Transducer m m e e
 filterG p = local f
   where
+    {-# INLINE [0] f #-}
     f c e | p e = c e
           | otherwise = return ()
 
 foldG :: Monad m => (s -> e -> m s) -> s -> Producer (StateT s m) e -> m s
 foldG f s0 p = execStateT (runGenT p fs) s0
   where
+    {-# INLINE [0] fs #-}
     fs e = get >>= lift . flip f e >>= put
 
+{-# RULES "foldG/mapsG" forall f g s. foldG g s . mapsG f =
+    foldG (\acc -> foldM g acc . f) s . mapG' #-}
+
 -- Mealy-like
+{-# INLINE [1] streamG #-}
 streamG :: Monad m => (s -> e1 -> (s, [e2])) -> s -> Transducer (StateT s (GenT e2 m)) m e1 e2
 streamG f s0 gen = const () `liftM` foldG f' s0 gen
   where
+    {-# INLINE [0] f' #-}
     f' s e = case f s e of
         (!s', es) -> do
             Fold.mapM_ yield es
             return s'
 
 -- Mealy-like
+{-# INLINE [1] streamGM #-}
 streamGM :: Monad m => (s -> e1 -> m (s, [e2])) -> s -> Transducer (StateT s (GenT e2 m)) m e1 e2
 streamGM f s0 gen = const () `liftM` foldG f' s0 gen
   where
+    {-# INLINE [0] f' #-}
     f' s e = do
       !(!s',es) <- lift $ f s e
       Fold.mapM_ yield es
