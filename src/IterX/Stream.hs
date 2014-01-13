@@ -573,6 +573,7 @@ groupVec n
             GM.unsafeWrite v thisIx i
             return $ Skip (v,thisIx+1)
 
+-- currently this version seems faster
 {-# INLINE groupVec2 #-}
 groupVec2 :: forall p m i v. (Streaming p, Monad m, G.Vector v i, GM.MVector (G.Mutable v) i) => Int -> p m i (v i)
 groupVec2 n
