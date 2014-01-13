@@ -240,7 +240,7 @@ unfoldIdM = UnfoldM Just $ \x -> case x of
 
 newtype Stepper b = Stepper { unStepper :: Maybe (b, Stepper b) }
 
-{-# INLINE [1] unfoldVec #-}
+{-# INLINE unfoldVec #-}
 unfoldVec :: (G.Vector v a, Monad m) => UnfoldM m (v a) a
 unfoldVec = UnfoldM mkS loop
   where
@@ -250,21 +250,18 @@ unfoldVec = UnfoldM mkS loop
                     Stepper $ Just (G.unsafeIndex v i, f (i+1))
                 | otherwise = (Stepper Nothing)
         in f 0
-    {-# INLINE [0] loop #-}
     loop (Stepper this) = return this
 
 -- this currently performs much better than the closure-based unfolding
-{-# INLINE [1] unfoldVec2 #-}
+{-# INLINE unfoldVec2 #-}
 unfoldVec2 :: (G.Vector v a, Monad m) => UnfoldM m (v a) a
 unfoldVec2 = UnfoldM mkS f
   where
-    {-# INLINE [0] mkS #-}
     mkS v = (0,G.length v, v)
-    {-# INLINE [0] f #-}
     f (i,n,v) | i < n = return $ Just (G.unsafeIndex v i,(i+1,n,v))
               | otherwise = return Nothing
 
-{-# INLINE [1] unfoldList #-}
+{-# INLINE unfoldList #-}
 unfoldList :: Monad m => UnfoldM m [a] a
 unfoldList = UnfoldM P.id f
   where
