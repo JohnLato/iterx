@@ -634,7 +634,7 @@ products = folding (*) 1
 count :: (Folding p, Num cnt, Monad m) => p m a cnt
 count = folding (\b _ -> b+1) 0
 
-{-# INLINE [1] zippingWith #-}
+{-# INLINE zippingWith #-}
 zippingWith
   :: (Folding p, Monad m)
   => (b -> c -> d)
@@ -649,7 +649,7 @@ zippingWith cmb (FoldM f1 s1_0 out1) (FoldM f2 s2_0 out2) =
     {-# INLINE [0] mkOut #-}
     mkOut (s1,s2) = liftM2 cmb (out1 s1) (out2 s2)
 
-{-# INLINE [1] preAnnotate #-}
+{-# INLINE preAnnotate #-}
 -- annotate a Stream output by a 'FoldM'.  The fold is updated before
 -- the stream, so the fold state will be updated even if the stream doesn't
 -- produce an output value at a step
@@ -666,7 +666,7 @@ preAnnotate (Stream sf ss0) (FoldM ff fs0 mkOut) =
             Skip ss'  -> return $ Skip (ss',fs')
             End       -> return End
 
-{-# INLINE [1] postAnnotate #-}
+{-# INLINE postAnnotate #-}
 -- annotate a Stream output with a 'FoldM' value.  The fold is updated after
 -- the stream, and only when the stream produces an output value
 postAnnotate :: (Streaming p, Monad m)
