@@ -143,17 +143,3 @@ main = defaultMain
       , bench "unfoldLoopNew" (prodTest5b >>= \x -> x `seq` return ())
       ]
   ]
-
--- toElems :: Monad m => TransduceFold m (V.Vector Int) Int
--- toElems = byUnfold unfoldVec
-
-{-
-summer :: Monad m => FoldM m Int Int
-summer = FoldM (\a b -> return $! a+b) 0 return
-
-prodTest2 :: IO Int
-prodTest2 = runFold gen1 $ toElems $ summer
-
-prodTest3 :: IO Int
-prodTest3 = runFold gen1 $ toElems $ byStream modV3 $ byStream modV1 $ summer
--}
