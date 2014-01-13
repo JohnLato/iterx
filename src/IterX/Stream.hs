@@ -300,7 +300,9 @@ foldUnfolding :: Monad m => UnfoldM m a b -> FoldM m b c -> FoldM m a c
 foldUnfolding (UnfoldM mkUnf uf) (FoldM f s0 mkOut) =
     FoldM (\s a -> loop2 (mkUnf a) s) s0 mkOut
   where
-    -- it's much faster to leave this un-INLINEd
+    -- it's much faster to leave this un-INLINEd for simple tests,
+    -- but on prodTest4, it makes the regular vector unfolding
+    -- more efficient.  Need more data to know what's best.
     loop2 unfState foldState = uf unfState >>= \case
         Just (a, unfState') -> f foldState a >>= loop2 unfState'
         Nothing -> return foldState
