@@ -103,6 +103,7 @@ prodTest5b :: IO Int
 prodTest5b = runFold (foldY (count :: FoldM IO (V.Vector Int) Int)
     $ groupVec2 2 . filters even . maps (+1) . unfolding unfoldVec) gen1
 
+-- ------------------------------------------
 
 vecTest4 :: V.Vector Int -> V.Vector Int
 vecTest4 = V.map (*2) . V.filter even . V.map (+1)

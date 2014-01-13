@@ -573,7 +573,8 @@ groupVec n
             GM.unsafeWrite v thisIx i
             return $ Skip (v,thisIx+1)
 
--- currently this version seems faster
+-- currently this version seems slower, unless you don't actually
+-- use the vector.  Of course it doesn't have the IO dependency...
 {-# INLINE groupVec2 #-}
 groupVec2 :: forall p m i v. (Streaming p, Monad m, G.Vector v i, GM.MVector (G.Mutable v) i) => Int -> p m i (v i)
 groupVec2 n
@@ -582,14 +583,14 @@ groupVec2 n
     | otherwise = error $ "<iterx> groupVec2: n " ++ show n
   where
     {-# INLINE [0] loop #-}
-    loop :: (GN.New v i,Int) -> i -> m (Step (GN.New v i,Int) (v i))
     loop (v,thisIx) i
         | thisIx == n-1 =
             let thisV = runST $ do
                     mv <- GN.run v
                     GM.unsafeWrite mv thisIx i
                     G.unsafeFreeze mv
-            in return $ Val (GN.create (GM.unsafeNew n),0) thisV
+            in return $
+                Val (GN.create (GM.unsafeNew n) :: GN.New v i,0) thisV
         | otherwise = return $ Skip (GN.modify (\mv -> GM.unsafeWrite mv thisIx i) v,thisIx+1)
 
 --------------------------------------------------------
