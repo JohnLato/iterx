@@ -37,18 +37,15 @@ gen2 = yieldList $ Prelude.replicate 100 v1
 
 collectTest :: IO Int
 collectTest = runFold (foldY (count :: FoldM IO (V.Vector Int) Int)
-    $ groupVec 6 . filters even . unfolding unfoldVec2) (yieldList [v1,v1])
+    $ groupVec 6 . filters even . unfolding unfoldVec) (yieldList [v1,v1])
 
 
 prodTest1 :: IO Int
 prodTest1 = runFold count gen1
 
-prodTest2 :: IO Int
-prodTest2 = runFold (foldY count $ unfolding unfoldVec) gen1
-
 -- this is faster than the closer variant so far
 prodTest2b :: IO Int
-prodTest2b = runFold (foldY count $ unfolding unfoldVec2) gen1
+prodTest2b = runFold (foldY count $ unfolding unfoldVec) gen1
 
 prodTest2c :: IO Int
 prodTest2c = foldG (\a b -> return $! a+b) 0 $ mapsG V.toList gen1
@@ -57,7 +54,7 @@ prodTest2c = foldG (\a b -> return $! a+b) 0 $ mapsG V.toList gen1
 -- I create my own composition operator
 prodTest3 :: IO Int
 prodTest3 = runFold (foldY sums
-    $ maps (*2) . maps (+1) . unfolding unfoldVec2) gen1
+    $ maps (*2) . maps (+1) . unfolding unfoldVec) gen1
 
 vecTest3 :: V.Vector Int -> V.Vector Int
 vecTest3 = V.map (*2) . V.map (+1)
@@ -75,30 +72,36 @@ iterTest2b = I.run =<< I.enumList [v1,v1] (I.joinI $ I.mapChunks (\x -> (:[]) $!
 
 prodTest4 :: IO Int
 prodTest4 = runFold (foldY sums
-    $ maps (*2) . filters even . maps (+1) . unfolding unfoldVec2) gen1
-
-prodTest4a :: IO Int
-prodTest4a = runFold (foldY sums
     $ maps (*2) . filters even . maps (+1) . unfolding unfoldVec) gen1
-
 
 prodTest4b :: IO Int
 prodTest4b = runFold sums
+    $ transduceY (maps (*2) . filters even . maps (+1) . unfolding unfoldVec)
+      gen1
+
+prodTest4b1 :: IO Int
+prodTest4b1 = runFold sums
     $ transduceY (maps (*2) . filters even . maps (+1) . unfolding unfoldVec2)
       gen1
 
 prodTest4c :: IO Int
 prodTest4c = foldG (\a b -> return $! a+b) 0
+    $ transduceY (maps (*2) . filters even . maps (+1) . unfolding unfoldVec)
+      gen1
+
+prodTest4c1 :: IO Int
+prodTest4c1 = foldG (\a b -> return $! a+b) 0
     $ transduceY (maps (*2) . filters even . maps (+1) . unfolding unfoldVec2)
       gen1
 
+
 prodTest5 :: IO Int
 prodTest5 = runFold (foldY (count :: FoldM IO (V.Vector Int) Int)
-    $ groupVec 2 . filters even . maps (+1) . unfolding unfoldVec2) gen1
+    $ groupVec 2 . filters even . maps (+1) . unfolding unfoldVec) gen1
 
 prodTest5b :: IO Int
 prodTest5b = runFold (foldY (count :: FoldM IO (V.Vector Int) Int)
-    $ groupVec2 2 . filters even . maps (+1) . unfolding unfoldVec2) gen1
+    $ groupVec2 2 . filters even . maps (+1) . unfolding unfoldVec) gen1
 
 
 vecTest4 :: V.Vector Int -> V.Vector Int
@@ -115,8 +118,7 @@ instance I.NullPoint (Vector Int) where
 
 main = defaultMain
   [ bgroup "test2"
-      [ bench "unfoldClosure" (prodTest2  >>= \x -> x `seq` return ())
-      , bench "unfoldLoop"    (prodTest2b >>= \x -> x `seq` return ())
+      [ bench "unfoldLoop"    (prodTest2b >>= \x -> x `seq` return ())
       , bench "justVector"  $ whnf (V.sum . V.concat) [v1,v1]
       , bench "allProducer"   (prodTest2c >>= \x -> x `seq` return ())
       , bench "iteratee"      (iterTest2 >>= \x -> x `seq` return ())
@@ -129,9 +131,10 @@ main = defaultMain
       ]
   , bgroup "test4"
       [ bench "unfoldLoop"    (prodTest4  >>= \x -> x `seq` return ())
-      , bench "unfoldClosure" (prodTest4a >>= \x -> x `seq` return ())
       , bench "transduce"     (prodTest4b >>= \x -> x `seq` return ())
+      , bench "transduce closure" (prodTest4b1 >>= \x -> x `seq` return ())
       , bench "transduce 2"   (prodTest4c >>= \x -> x `seq` return ())
+      , bench "transduce 2 closure"   (prodTest4c1 >>= \x -> x `seq` return ())
       , bench "justVector"  $ whnf (V.sum . vecTest4 . V.concat) [v1,v1]
       , bench "justVector b" $ whnf (vecTest4b) [v1,v1]
       ]
