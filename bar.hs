@@ -94,6 +94,17 @@ prodTest4c1 = foldG (\a b -> return $! a+b) 0
     $ transduceY (maps (*2) . filters even . maps (+1) . unfolding unfoldVec2)
       gen1
 
+-- ------------------------------------------
+
+-- one problem with this is that there's no way to terminate and get a
+-- partial value out.  If I use a Fold, then I'd produce a value at every
+-- step.  What I really want is like a Stream but with a finalizer...
+-- But how do I know it's over?
+--   feed an input that throws an exception on eval?  Seems ugly.
+--   FoldM m i (Bool, o) ?
+--   make something like a Stream but with an extra 's->o' function?
+
+ufv = unfoldVec :: UnfoldM IO (V.Vector Int) Int
 
 prodTest5 :: IO Int
 prodTest5 = runFold (foldY (count :: FoldM IO (V.Vector Int) Int)
