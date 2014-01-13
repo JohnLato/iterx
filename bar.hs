@@ -98,7 +98,7 @@ main = defaultMain
       , bench "justVector"  $ whnf (V.sum . V.concat) [v1,v1]
       , bench "allProducer"   (prodTest2c >>= \x -> x `seq` return ())
       , bench "iteratee"      (iterTest2 >>= \x -> x `seq` return ())
-      , bench "iteratee_b"    (iterTest2 >>= \x -> x `seq` return ())
+      , bench "iteratee_b"    (iterTest2b >>= \x -> x `seq` return ())
       ]
   , bgroup "test3"
       [ bench "unfoldLoop"    (prodTest3 >>= \x -> x `seq` return ())
