@@ -50,7 +50,7 @@ idStream :: Monad m => Stream m i i
 idStream = Stream loop ()
   where
     {-# INLINE [0] loop #-}
-    loop !() i = return (Val () i)
+    loop _ i = return (Val () i)
 
 {-# INLINE [1] cmpStream #-}
 cmpStream :: Monad m => Stream m b c -> Stream m a b -> Stream m a c
@@ -67,6 +67,11 @@ cmpStream (Stream rF rs0) (Stream lF ls0) = Stream loop (ls0,rs0)
                   End       -> return End
           Skip ls' -> return (Skip (ls',rs))
           End      -> return End
+
+{-# RULES
+"<iterx> id.stream" forall s. cmpStream idStream s = s
+"<iterx> stream.id" forall s. cmpStream s idStream = s
+    #-}
 
 instance Monad m => Profunctor (Stream m) where
     {-# INLINE dimap #-}
@@ -116,15 +121,18 @@ foldS :: (MonadBase IO m)
       => FoldM m b c
       -> Stream m a b
       -> FoldM m a c
-foldS (FoldM f fs0 mkOut) (Stream loopS s0) = FoldM loop (fs0, s0) out
+foldS (FoldM f fs0 mkOut) (Stream loopS s0) =
+    FoldM loop (fs0, s0) (mkOut . fst)
   where
     {-# INLINE [0] loop #-}
     loop (prev,s) el = loopS s el >>= \case
         Val s' o -> (, s') `liftM` f prev o
         Skip s'  -> return $ (prev, s')
         End      -> throwIO $ TerminateEarly "foldMStream"
-    {-# INLINE [0] out #-}
+    {-# INLINE out #-}
     out = mkOut . fst
+
+{-# RULES "<iterx> foldS/id" forall f. foldS f idStream = f #-}
 
 {-# INLINE [1] foldMStream #-}
 foldMStream :: (MonadBase IO m)
@@ -337,10 +345,7 @@ instance Monad m => Category (Y m) where
 
 {-# INLINE [1] idY #-}
 idY :: Monad m => Y m a a
-idY = Y unfoldIdM s f
-  where
-    s = Stream (\() a -> return (Val () a)) ()
-    f = Stream (\() a -> return (Val () a)) ()
+idY = Y unfoldIdM idStream idStream
 
 -- composition is nice, we only need to create a new unfolding from
 -- an intermediate stream.
@@ -364,17 +369,21 @@ liftS s = Y unfoldIdM s id
   -- id could go on either side, but if it's on the right, then compositions
   -- have an inner 'id . stream', which can be more easily removed by RULES.
 
--- possible rewrites:
---  newUnf: create a simplified version for id stream (probably not necessary)
-
-{-# RULES "<iterx> liftS (liftS)" forall l r. cmpY (liftS l) (liftS r) = liftS (l . r) #-}
 -- we need this one because composition is right-associative by default
-{-# RULES "<iterx> liftS/cmpY liftS" forall l r z. cmpY (liftS l) (cmpY (liftS r) z) = cmpY (liftS (l . r)) z #-}
-{-# RULES "<iterx> liftS/liftS" forall l r. liftS l . liftS r = liftS (l . r) #-}
+{-# RULES
+"<iterx> liftS (liftS)" forall l r. cmpY (liftS l) (liftS r)
+          = liftS (l . r)
+"<iterx> liftS/cmpY liftS"
+         forall l r z. cmpY (liftS l) (cmpY (liftS r) z)
+           = cmpY (liftS (l . r)) z
+"<iterx> liftS/liftS" forall l r. liftS l . liftS r = liftS (l . r)
+    #-}
 
-{-# RULES "<iterx> liftS/id" liftS idStream = idY #-}
-{-# RULES "<iterx> idY" forall y. cmpY idY y = y #-}
-{-# RULES "<iterx> idStream" forall y. cmpStream idStream y = y #-}
+{-# RULES
+"<iterx> liftS/id" liftS idStream = idY
+"<iterx> idY" forall y. cmpY idY y = y
+"<iterx> idStream" forall y. cmpStream idStream y = y
+    #-}
 
 -- composing 'Stream' with 'Y' can be efficient
 cmpStreamY :: Monad m => Stream m b c -> Y m a b -> Y m a c
@@ -383,10 +392,17 @@ cmpStreamY s (Y unf s1 s2) = Y unf s1 (s . s2)
 cmpYStream :: Monad m => Y m b c -> Stream m a b -> Y m a c
 cmpYStream (Y unf s1 s2) s = Y unf (s1 . s) s2
 
-{-# RULES "<iterx> cmpY/stream" forall s y. cmpY (liftS s) y = cmpStreamY s y #-}
-{-# RULES "<iterx> stream/cmpY" forall s y. cmpY y (liftS s) = cmpYStream y s #-}
+{-# RULES
+"<iterx> cmpY/stream" forall s y. cmpY (liftS s) y = cmpStreamY s y
+"<iterx> cmpYStream/id" forall y. cmpStreamY idStream y = y
+    #-}
 
-{-# INLINE [1] foldY #-}
+{-# RULES
+"<iterx> stream/cmpY" forall s y. cmpY y (liftS s) = cmpYStream y s
+"<iterx> id/cmpYStream" forall y. cmpYStream y idStream = y
+    #-}
+
+{-# INLINE foldY #-}
 -- fold over a 'Y' structure
 foldY :: MonadBase IO m => FoldM m b c -> Y m a b -> FoldM m a c
 foldY finalFold (Y unf s1 s2) =
@@ -396,7 +412,7 @@ foldY finalFold (Y unf s1 s2) =
 
 {-# INLINE unfolding #-}
 unfolding :: Monad m => UnfoldM m a b -> Y m a b
-unfolding unf = Y unf id id
+unfolding unf = Y unf idStream idStream
 
 --------------------------------------------------------
 class Streaming p where
@@ -428,7 +444,7 @@ filters :: (Streaming p, Monad m) => (i -> Bool) -> p m i i
 filters p = liftStream $ Stream loop ()
   where
     {-# INLINE [0] loop #-}
-    loop !() i = case p i of
+    loop _ i = case p i of
         True  -> return (Val () i)
         False -> return (Skip ())
 
