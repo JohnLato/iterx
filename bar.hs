@@ -32,6 +32,14 @@ modV3 = maps (*2) . filters even . maps (+1)
 gen1 :: Monad m => Producer m (V.Vector Int)
 gen1 = yieldList [v1,v1]
 
+gen2 :: Monad m => Producer m (V.Vector Int)
+gen2 = yieldList $ Prelude.replicate 100 v1
+
+collectTest :: IO Int
+collectTest = runFold (foldY (count :: FoldM IO (V.Vector Int) Int)
+    $ groupVec 6 . filters even . unfolding unfoldVec2) (yieldList [v1,v1])
+
+
 prodTest1 :: IO Int
 prodTest1 = runFold count gen1
 
@@ -79,6 +87,20 @@ prodTest4b = runFold sums
     $ transduceY (maps (*2) . filters even . maps (+1) . unfolding unfoldVec2)
       gen1
 
+prodTest4c :: IO Int
+prodTest4c = foldG (\a b -> return $! a+b) 0
+    $ transduceY (maps (*2) . filters even . maps (+1) . unfolding unfoldVec2)
+      gen1
+
+prodTest5 :: IO Int
+prodTest5 = runFold (foldY (count :: FoldM IO (V.Vector Int) Int)
+    $ groupVec 2 . filters even . maps (+1) . unfolding unfoldVec2) gen1
+
+prodTest5b :: IO Int
+prodTest5b = runFold (foldY (count :: FoldM IO (V.Vector Int) Int)
+    $ groupVec2 2 . filters even . maps (+1) . unfolding unfoldVec2) gen1
+
+
 vecTest4 :: V.Vector Int -> V.Vector Int
 vecTest4 = V.map (*2) . V.filter even . V.map (+1)
 
@@ -109,8 +131,13 @@ main = defaultMain
       [ bench "unfoldLoop"    (prodTest4  >>= \x -> x `seq` return ())
       , bench "unfoldClosure" (prodTest4a >>= \x -> x `seq` return ())
       , bench "transduce"     (prodTest4b >>= \x -> x `seq` return ())
+      , bench "transduce 2"   (prodTest4c >>= \x -> x `seq` return ())
       , bench "justVector"  $ whnf (V.sum . vecTest4 . V.concat) [v1,v1]
       , bench "justVector b" $ whnf (vecTest4b) [v1,v1]
+      ]
+  , bgroup "test5"
+      [ bench "unfoldLoop"    (prodTest5 >>= \x -> x `seq` return ())
+      , bench "unfoldLoopNew" (prodTest5b >>= \x -> x `seq` return ())
       ]
   ]
 
