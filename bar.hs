@@ -54,12 +54,31 @@ prodTest3 = runFold (foldY sums
 vecTest3 :: V.Vector Int -> V.Vector Int
 vecTest3 = V.map (*2) . V.map (+1)
 
+vecTest3b :: [V.Vector Int] -> Int
+vecTest3b = V.sum . V.map (*2) . V.map (+1) . V.concat
+
+
 iterTest2 :: IO Int
 iterTest2 = I.run =<< I.enumList [v1,v1] (I.joinI $ I.mapChunks (V.toList) I.sum)
 
 iterTest2b :: IO Int
 iterTest2b = I.run =<< I.enumList [v1,v1] (I.joinI $ I.mapChunks (\x -> (:[]) $! V.sum x) I.sum)
 
+
+prodTest4 :: IO Int
+prodTest4 = runFold (foldY sums
+    $ maps (*2) . filters even . maps (+1) . unfolding unfoldVec2) gen1
+
+prodTest4b :: IO Int
+prodTest4b = runFold sums
+    $ transduceY (maps (*2) . filters even . maps (+1) . unfolding unfoldVec2)
+      gen1
+
+vecTest4 :: V.Vector Int -> V.Vector Int
+vecTest4 = V.map (*2) . V.filter even . V.map (+1)
+
+vecTest4b :: [V.Vector Int] -> Int
+vecTest4b = V.sum . V.map (*2) . V.filter even . V.map (+1) . V.concat
 
 instance I.Nullable (Vector Int) where
     nullC = V.null
@@ -79,6 +98,13 @@ main = defaultMain
   , bgroup "test3"
       [ bench "unfoldLoop"    (prodTest3 >>= \x -> x `seq` return ())
       , bench "justVector"  $ whnf (V.sum . vecTest3 . V.concat) [v1,v1]
+      , bench "justVector b" $ whnf (vecTest3b) [v1,v1]
+      ]
+  , bgroup "test4"
+      [ bench "unfoldLoop"    (prodTest4  >>= \x -> x `seq` return ())
+      , bench "transduce"     (prodTest4b >>= \x -> x `seq` return ())
+      , bench "justVector"  $ whnf (V.sum . vecTest4 . V.concat) [v1,v1]
+      , bench "justVector b" $ whnf (vecTest4b) [v1,v1]
       ]
   ]
 
