@@ -69,6 +69,11 @@ prodTest4 :: IO Int
 prodTest4 = runFold (foldY sums
     $ maps (*2) . filters even . maps (+1) . unfolding unfoldVec2) gen1
 
+prodTest4a :: IO Int
+prodTest4a = runFold (foldY sums
+    $ maps (*2) . filters even . maps (+1) . unfolding unfoldVec) gen1
+
+
 prodTest4b :: IO Int
 prodTest4b = runFold sums
     $ transduceY (maps (*2) . filters even . maps (+1) . unfolding unfoldVec2)
@@ -102,6 +107,7 @@ main = defaultMain
       ]
   , bgroup "test4"
       [ bench "unfoldLoop"    (prodTest4  >>= \x -> x `seq` return ())
+      , bench "unfoldClosure" (prodTest4a >>= \x -> x `seq` return ())
       , bench "transduce"     (prodTest4b >>= \x -> x `seq` return ())
       , bench "justVector"  $ whnf (V.sum . vecTest4 . V.concat) [v1,v1]
       , bench "justVector b" $ whnf (vecTest4b) [v1,v1]
