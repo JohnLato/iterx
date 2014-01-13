@@ -423,7 +423,7 @@ mapsM f = liftStream $ Stream loop ()
 maps :: (Streaming p, Monad m) => (i -> o) -> p m i o
 maps f = mapsM (return . f)
 
-{-# INLINE [1] filters #-}
+{-# INLINE filters #-}
 filters :: (Streaming p, Monad m) => (i -> Bool) -> p m i i
 filters p = liftStream $ Stream loop ()
   where
@@ -448,7 +448,7 @@ drops n0 = liftStream $ Stream loop n0
     loop n a | n > 0 = return $ Skip (n-1)
              | otherwise = return $ Val 0 a
 
-{-# INLINE [1] group #-}
+{-# INLINE group #-}
 group :: (Streaming p, Monad m) => Int -> p m i [i]
 group n 
     | n == 1 = maps (:[])
