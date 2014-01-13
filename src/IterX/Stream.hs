@@ -229,7 +229,8 @@ fromStream sz str = do
 
 -- -----------------------------------------
 -- Unfoldings
-data UnfoldM m full a = forall s. UnfoldM (full -> s) (s -> m (Maybe (a,s)))
+data UnfoldM m full a =
+    forall s. UnfoldM (full -> s) (s -> m (Maybe (a,s)))
 
 {-# INLINE [1] unfoldIdM #-}
 unfoldIdM :: Monad m => UnfoldM m a a
