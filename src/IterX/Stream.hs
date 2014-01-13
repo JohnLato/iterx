@@ -166,18 +166,41 @@ runStream_ (Stream f s0) gen = const () `liftM` foldG f' s0 gen
         Skip s'  -> return s'
         End      -> throwIO $ TerminateEarly "runStream_"
 
-{-# INLINE [1] mkTransducer #-}
-mkTransducer :: MonadBase IO m
-             => Stream m i o
-             -> (forall s. Producer (StateT s (GenT o m)) i)
-             -> Producer m o
-mkTransducer (Stream f s0) gen = foldG f' s0 gen >> return ()
+{-# INLINE [1] transduceStream #-}
+transduceStream :: MonadBase IO m
+                => Stream m i o
+                -> (forall s. Producer (StateT s (GenT o m)) i)
+                -> Producer m o
+transduceStream (Stream f s0) gen = foldG f' s0 gen >> return ()
   where
     {-# INLINE [0] f' #-}
     f' s i = lift (f s i) >>= \case
         Val s' o -> yield o >> return s'
         Skip s'  -> return s'
         End      -> throwIO $ TerminateEarly "mkTransducer"
+
+{-# INLINE [1] transduceY #-}
+transduceY :: MonadBase IO m
+           => Y m i o
+           -> (forall s. Producer (StateT s (GenT o m)) i)
+           -> Producer m o
+transduceY (Y (UnfoldM mkUnf uf) (Stream sf1 s1_0) (Stream sf2 s2_0)) gen =
+    foldG f' (s1_0, s2_0) gen >> return ()
+  where
+    {-# INLINE [0] f' #-}
+    f' (s1,s2) i = lift (sf1 s1 i) >>= \case
+        Val s1' x -> inner s1' s2 (mkUnf x)
+        Skip s1'  -> return (s1',s2)
+        End       -> throwIO $ TerminateEarly "<iterX> transduceY: outer loop"
+    {-# INLINE [0] inner #-}
+    inner s1 s20 unfS0 = go s20 unfS0
+      where
+        go s2 unfS = lift (uf unfS) >>= \case
+            Just (a,unfS') -> lift (sf2 s2 a) >>= \case
+                Val s2' o -> yield o >> go s2' unfS'
+                Skip s2'  -> go s2' unfS'
+                End       -> throwIO $ TerminateEarly "<iterX> transduceY: inner loop"
+            Nothing -> return (s1,s2)
 
 -- -----------------------------------------
 
