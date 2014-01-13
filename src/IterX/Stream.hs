@@ -129,8 +129,6 @@ foldS (FoldM f fs0 mkOut) (Stream loopS s0) =
         Val s' o -> (, s') `liftM` f prev o
         Skip s'  -> return $ (prev, s')
         End      -> throwIO $ TerminateEarly "foldMStream"
-    {-# INLINE out #-}
-    out = mkOut . fst
 
 {-# RULES "<iterx> foldS/id" forall f. foldS f idStream = f #-}
 
