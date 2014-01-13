@@ -6,6 +6,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
@@ -26,8 +27,11 @@ import Control.Monad
 import Control.Monad.Base
 import Control.Monad.State
 import Data.Foldable
--- import qualified Data.Vector.Mutable as VM
 import qualified Data.Vector.Generic as G
+import qualified Data.Vector.Generic.Mutable as GM
+import qualified Data.Vector.Generic.New as GN
+import Control.Monad.ST (runST)
+import GHC.IO (unsafeDupablePerformIO)
 
 data Step s o =
     Val s o
@@ -277,6 +281,7 @@ newUnf :: Monad m
        -> UnfoldM m full2 el2
        -> UnfoldM m full1 el2
 newUnf (Stream fStrm ss0) (UnfoldM uf10 uf1) (UnfoldM uf20 uf2) = UnfoldM (\full -> (ss0,uf10 full,Nothing)) go
+  -- this is a bug: the stream state is not preserved across unfoldings!
   where
     {-# INLINE [0] go #-}
     go (ss,s,Just akt) = go2 ss s akt
@@ -452,6 +457,42 @@ group n
     loop (cnt,acc) x
       | cnt == (n-1) = return $ Val (0,P.id) (acc [x])
       | otherwise = return $ Skip (cnt+1,acc . (x:))
+
+{-# INLINE groupVec #-}
+groupVec :: (Streaming p, MonadBase IO m, G.Vector v i) => Int -> p m i (v i)
+groupVec n
+    | n > 1 = liftStream $ Stream loop (unsafeDupablePerformIO (GM.unsafeNew n),0)
+    | n == 1 = maps (G.singleton)
+    | otherwise = error $ "<iterx> groupVec: n " ++ show n
+  where
+    {-# INLINE [0] loop #-}
+    loop (v,thisIx) i
+        | thisIx == n-1 = liftBase $ do
+            GM.unsafeWrite v thisIx i
+            v' <- G.unsafeFreeze v
+            v'2 <- GM.unsafeNew n
+            return $ Val (v'2,0) v'
+        | otherwise = liftBase $ do
+            GM.unsafeWrite v thisIx i
+            return $ Skip (v,thisIx+1)
+
+{-# INLINE groupVec2 #-}
+groupVec2 :: forall p m i v. (Streaming p, Monad m, G.Vector v i, GM.MVector (G.Mutable v) i) => Int -> p m i (v i)
+groupVec2 n
+    | n > 1 = liftStream $ Stream loop (GN.create (GM.unsafeNew n),0)
+    | n == 1 = maps (G.singleton)
+    | otherwise = error $ "<iterx> groupVec2: n " ++ show n
+  where
+    {-# INLINE [0] loop #-}
+    loop :: (GN.New v i,Int) -> i -> m (Step (GN.New v i,Int) (v i))
+    loop (v,thisIx) i
+        | thisIx == n-1 =
+            let thisV = runST $ do
+                    mv <- GN.run v
+                    GM.unsafeWrite mv thisIx i
+                    G.unsafeFreeze mv
+            in return $ Val (GN.create (GM.unsafeNew n),0) thisV
+        | otherwise = return $ Skip (GN.modify (\mv -> GM.unsafeWrite mv thisIx i) v,thisIx+1)
 
 --------------------------------------------------------
 
