@@ -311,27 +311,6 @@ foldUnfolding (UnfoldM mkUnf uf) (FoldM f s0 mkOut) =
 
 -- -----------------------------------------
 
-{-
-type TransduceFold m a b = forall c. FoldM m b c -> FoldM m a c
-
-{-# INLINE [1] byStream #-}
-byStream :: Monad m => Stream m a b -> TransduceFold m a b
-byStream (Stream fS s0S) (FoldM fEl s0El elOut) =
-    FoldM loop (Just s0S, s0El) (elOut . snd)
-  where
-    {-# INLINE [0] loop #-}
-    loop (Just sState, foldState) full = fS sState full >>= \case
-        Val sState' o -> fEl foldState o >>= \fs' -> return (Just sState',fs')
-        Skip sState'  -> return (Just sState',foldState)
-        End           -> return (Nothing,foldState)
-    loop s@(Nothing, _) _ = return s
-
-{-# RULES "<iterx> byStream/byStream" forall s t. byStream s . byStream t = byStream (t . s) #-}
-{-# RULES <iterx> "byStream (byStream)" forall s t x. byStream s (byStream t x) = byStream (t . s) x #-}
-
--- not entirely pleased with this yet, maybe this Y type is better?
--}
-
 -- this is basically a hylomorphism, and seems to have the properties I want.
 -- 'Y' is even more general than a basic Stream.
 data Y m i o where
