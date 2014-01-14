@@ -5,7 +5,7 @@ module Bar where
 import Prelude hiding ((.))
 import Control.Category
 import Control.Monad.Base
-import IterX.Stream
+import IterX.Fusion
 import IterX.Core
 import qualified Data.Iteratee as I
 import Data.Vector.Unboxed as V
