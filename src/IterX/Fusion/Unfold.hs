@@ -37,7 +37,7 @@ unfoldVec = UnfoldM mkS f
               | otherwise = return Nothing
 
 -------------------------------------------------------
-newtype Stepper b = Stepper { unStepper :: Maybe (b, Stepper b) }
+newtype Stepper b = Stepper { _unStepper :: Maybe (b, Stepper b) }
 
 {-# INLINE unfoldVec2 #-}
 unfoldVec2 :: (G.Vector v a, Monad m) => UnfoldM m (v a) a
