@@ -7,10 +7,7 @@
 
 {-# OPTIONS -Wall #-}
 
--- |Monadic Iteratees:
--- incremental input parsers, processors and transformers
---
--- Support for IO enumerators
+-- | Support for IO generators
 
 module IterX.ReadableChunk (
   ReadableChunk (..)
