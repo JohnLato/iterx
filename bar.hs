@@ -43,7 +43,7 @@ collectTest = runFold (foldY (count :: FoldM IO (V.Vector Int) Int)
 prodTest1 :: IO Int
 prodTest1 = runFold count gen1
 
--- this is faster than the closer variant so far
+-- this is faster than the closure variant so far
 prodTest2b :: IO Int
 prodTest2b = runFold (foldY count $ unfolding unfoldVec) gen1
 

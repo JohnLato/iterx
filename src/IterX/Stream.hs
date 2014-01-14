@@ -194,25 +194,7 @@ transduceY :: MonadBase IO m
            => Y m i o
            -> (forall s. Producer (StateT s (GenT o m)) i)
            -> Producer m o
-transduceY (Y (UnfoldM mkUnf uf) (Stream sf1 s1_0) (Stream sf2 s2_0)) gen =
-    foldG f' (s1_0, s2_0) gen >> return ()
-  where
-    {-# INLINE [0] f' #-}
-    f' (s1,s2) i = lift (sf1 s1 i) >>= \case
-        Val s1' x -> inner s1' s2 (mkUnf x)
-        Skip s1'  -> return (s1',s2)
-        End       -> throwIO $ TerminateEarly "<iterX> transduceY: outer loop"
-    {-# INLINE [0] inner #-}
-    inner s1 s20 unfS0 = go s20 unfS0
-      where
-        go s2 unfS = lift (uf unfS) >>= \case
-            Just (a,unfS') -> lift (sf2 s2 a) >>= \case
-                Val s2' o -> yield o >> go s2' unfS'
-                Skip s2'  -> go s2' unfS'
-                End       -> throwIO $ TerminateEarly "<iterX> transduceY: inner loop"
-            Nothing -> return (s1,s2)
-
-transduceY (Y (SUnfoldM unf0 mkUnf uf) (Stream sf1 s1_0) (Stream sf2 s2_0)) gen =
+transduceY (Y (UnfoldM unf0 mkUnf uf) (Stream sf1 s1_0) (Stream sf2 s2_0)) gen =
     foldG f' (unf0, s1_0, s2_0) gen >> return ()
   where
     {-# INLINE [0] f' #-}
@@ -253,120 +235,57 @@ fromStream sz str = do
 -- -----------------------------------------
 -- Unfoldings
 data UnfoldM m full a where
-    UnfoldM :: (full -> s) -> (s -> m (Maybe (a,s))) -> UnfoldM m full a
-    SUnfoldM :: t -> (t -> full -> s) -> (s -> m (Either t (a,s))) -> UnfoldM m full a
+    UnfoldM :: t -> (t -> full -> s) -> (s -> m (Either t (a,s))) -> UnfoldM m full a
 
 {-# INLINE [1] unfoldIdM #-}
 unfoldIdM :: Monad m => UnfoldM m a a
-unfoldIdM = UnfoldM Just $ \x -> case x of
-    Just a  -> return $ Just (a,Nothing)
-    Nothing -> return Nothing
+unfoldIdM = UnfoldM () (const Just) $ \x -> case x of
+    Just a  -> return $ Right (a,Nothing)
+    Nothing -> return $ Left ()
 
 -- this currently performs much better than the closure-based unfolding
 -- except on the transducer tests
 {-# INLINE unfoldVec #-}
 unfoldVec :: (G.Vector v a, Monad m) => UnfoldM m (v a) a
-unfoldVec = UnfoldM mkS f
+unfoldVec = UnfoldM () mkS f
   where
-    mkS v = (0,G.length v, v)
-    f (i,n,v) | i < n = return $ Just (G.unsafeIndex v i,(i+1,n,v))
-              | otherwise = return Nothing
+    mkS _ v = (0,G.length v, v)
+    f (i,n,v) | i < n = return $ Right (G.unsafeIndex v i,(i+1,n,v))
+              | otherwise = return $ Left ()
 
 -------------------------------------------------------
-newtype Stepper b = Stepper { unStepper :: Maybe (b, Stepper b) }
+newtype Stepper b = Stepper { unStepper :: Either () (b, Stepper b) }
 
 {-# INLINE unfoldVec2 #-}
 unfoldVec2 :: (G.Vector v a, Monad m) => UnfoldM m (v a) a
-unfoldVec2 = UnfoldM mkS loop
+unfoldVec2 = UnfoldM () mkS loop
   where
     {-# INLINE [0] mkS #-}
-    mkS v =
+    mkS () v =
         let f i | i < G.length v =
-                    Stepper $ Just (G.unsafeIndex v i, f (i+1))
-                | otherwise = (Stepper Nothing)
+                    Stepper $ Right (G.unsafeIndex v i, f (i+1))
+                | otherwise = (Stepper $ Left ())
         in f 0
     loop (Stepper this) = return this
 ---------------------------------------------------------
 
 {-# INLINE unfoldList #-}
 unfoldList :: Monad m => UnfoldM m [a] a
-unfoldList = UnfoldM P.id f
+unfoldList = UnfoldM () (const P.id) f
   where
-    f (x:xs) = return $ Just (x,xs)
-    f []     = return Nothing
+    f (x:xs) = return $ Right (x,xs)
+    f []     = return $ Left ()
 
 -- create a new unfolding from two other unfoldings and a 'Stream'.
 -- really only useful for composing 'Y' values.
---
--- this function has gotten really gross with two types of unfoldings.
 {-# INLINE [1] newUnf #-}
 newUnf :: Monad m
        => Stream m el1 full2
        -> UnfoldM m full1 el1
        -> UnfoldM m full2 el2
        -> UnfoldM m full1 el2
-newUnf (Stream fStrm ss0) (UnfoldM uf10 uf1) (UnfoldM uf20 uf2) =
-    SUnfoldM ss0 (\ss full -> (ss,uf10 full,Nothing)) go
-    -- in the case where ss0 :: (), we can leave this as a simple
-    -- unfolding.  But that's more work for now, and we may stick with
-    -- complex unfoldings the whole time in the end, so I can add it later
-  where
-    {-# INLINE [0] go #-}
-    go (ss,s,Just akt) = go2 ss s akt
-    go (ss,s,Nothing) = uf1 s >>= \case
-      Just (el1,s1') -> fStrm ss el1 >>= \case
-          Val ss' full2 ->
-              go2 ss' s1' $ uf2 $ uf20 full2
-          Skip ss' -> go (ss',s1',Nothing)
-          End -> throw $ TerminateEarly "<iterx> newUnf"
-      Nothing -> return $ Left ss
-    {-# INLINE [0] go2 #-}
-    go2 ss s akt = akt >>= \case
-        Just (el,f2s') ->
-            return $ Right (el,(ss,s,Just $ uf2 f2s'))
-        Nothing -> go (ss,s,Nothing)
-
-newUnf (Stream fStrm ss0) (SUnfoldM ufs10 uf10 uf1) (UnfoldM uf20 uf2) =
-        SUnfoldM (ufs10,ss0)
-                 (\(ufs1,ss) full -> (ss,uf10 ufs1 full,Nothing))
-                 go
-  where
-    {-# INLINE [0] go #-}
-    go (ss,s,Just akt) = go2 ss s akt
-    go (ss,s,Nothing) = uf1 s >>= \case
-      Right (el1,s1') -> fStrm ss el1 >>= \case
-          Val ss' full2 ->
-              go2 ss' s1' $ uf2 $ uf20 full2
-          Skip ss' -> go (ss',s1',Nothing)
-          End -> throw $ TerminateEarly "<iterx> newUnf"
-      Left ufs1' -> return $ Left (ufs1',ss)
-    {-# INLINE [0] go2 #-}
-    go2 ss s akt = akt >>= \case
-        Just (el,f2s') ->
-            return $ Right (el,(ss,s,Just $ uf2 f2s'))
-        Nothing -> go (ss,s,Nothing)
-
-newUnf (Stream fStrm ss0) (UnfoldM uf10 uf1) (SUnfoldM ufs20 uf20 uf2) =
-        SUnfoldM (ufs20,ss0)
-                 (\(ufs2,ss) full -> (ss,uf10 full,Left ufs2))
-                 go
-  where
-    {-# INLINE [0] go #-}
-    go (ss,full,Right akt) = go2 ss full akt
-    go (ss,full,Left ufs2) = uf1 full >>= \case
-        Just (el1,s1') -> fStrm ss el1 >>= \case
-          Val ss' full2 -> go2 ss' s1' $ uf2 $ uf20 ufs2 full2
-          Skip ss'      -> go (ss',s1',Left ufs2)
-          End -> throw $ TerminateEarly "<iterx> newUnf"
-        Nothing -> return $ Left (ufs2,ss)
-    {-# INLINE [0] go2 #-}
-    go2 ss full akt = akt >>= \case
-        Right (el,f2s') ->
-            return $ Right (el,(ss,full,Right $ uf2 f2s'))
-        Left ufs2' -> go (ss,full,Left ufs2')
-
-newUnf (Stream fStrm ss0) (SUnfoldM ufs10 uf10 uf1) (SUnfoldM ufs20 uf20 uf2) =
-        SUnfoldM (ufs10,ufs20,ss0)
+newUnf (Stream fStrm ss0) (UnfoldM ufs10 uf10 uf1) (UnfoldM ufs20 uf20 uf2) =
+        UnfoldM (ufs10,ufs20,ss0)
                  (\(ufs1,ufs2,ss) full -> (ss,uf10 ufs1 full,Left ufs2))
                  go
   where
@@ -384,19 +303,9 @@ newUnf (Stream fStrm ss0) (SUnfoldM ufs10 uf10 uf1) (SUnfoldM ufs20 uf20 uf2) =
             return $ Right (el,(ss,full,Right $ uf2 f2s'))
         Left ufs2' -> go (ss,full,Left ufs2')
 
-
 {-# INLINE [1] foldUnfolding #-}
 foldUnfolding :: Monad m => UnfoldM m a b -> FoldM m b c -> FoldM m a c
-foldUnfolding (UnfoldM mkUnf uf) (FoldM f s0 mkOut) =
-    FoldM (\s a -> loop2 (mkUnf a) s) s0 mkOut
-  where
-    -- it's much faster to leave this un-INLINEd for simple tests,
-    -- but on prodTest4, it makes the regular vector unfolding
-    -- more efficient.  Need more data to know what's best.
-    loop2 unfState foldState = uf unfState >>= \case
-        Just (a, unfState') -> f foldState a >>= loop2 unfState'
-        Nothing -> return foldState
-foldUnfolding (SUnfoldM unfS0 mkUnf uf) (FoldM f s0 mkOut) =
+foldUnfolding (UnfoldM unfS0 mkUnf uf) (FoldM f s0 mkOut) =
     FoldM (\(unfS,s) a -> loop2 (mkUnf unfS a) s) (unfS0,s0) (mkOut.snd)
   where
     -- it's much faster to leave this un-INLINEd for simple tests,
