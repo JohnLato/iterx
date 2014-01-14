@@ -18,6 +18,11 @@ library
                        IterX.Generators,
                        IterX.Core,
                        IterX.Exception,
+                       IterX.Fusion.Fold,
+                       IterX.Fusion.Hylo,
+                       IterX.Fusion.Stream,
+                       IterX.Fusion.Unfold,
+                       IterX.Fusion,
                        IterX.IterX,
                        IterX.Parser,
                        IterX.Parser.Binary,
@@ -32,8 +37,9 @@ library
                        transformers-base >=0.4 && <0.5,
                        mtl >=2.1 && <2.2,
                        monad-control >=0.3 && <0.4,
-                       mono-traversable == 0.1.*,
+                       mono-traversable >= 0.1 && < 0.3,
+                       profunctors >= 3 && < 5,
                        vector >= 0.10 && < 0.12,
-                       word24
+                       word24 >= 1 && < 2
   hs-source-dirs:      src
   default-language:    Haskell2010
