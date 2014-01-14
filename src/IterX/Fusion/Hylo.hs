@@ -237,15 +237,11 @@ foldUnfolding (SUnfoldM unfS0 mkUnf uf) (FoldM f s0 mkOut) =
 
 --------------------------------------------------------
 
-
--- -----------------------------------------
-
 {-# INLINE [1] liftS #-}
 liftS :: Monad m => Stream m a b -> Y m a b
 liftS s = Y unfoldIdM s id
-  -- id could go on either side, but if it's on the right, then compositions
-  -- have an inner 'id . stream', which can be more easily removed by RULES.
-
+-- id could go on either side, but if it's on the right, then composition
+-- has an inner 'id . stream', which can be more easily removed by RULES
 
 -- we need this one because composition is right-associative by default
 {-# RULES
@@ -255,9 +251,7 @@ liftS s = Y unfoldIdM s id
          forall l r z. cmpY (liftS l) (cmpY (liftS r) z)
            = cmpY (liftS (l . r)) z
 "<iterx> liftS/liftS" forall l r. liftS l . liftS r = liftS (l . r)
-    #-}
 
-{-# RULES
 "<iterx> liftS/id" liftS idStream = idY
 "<iterx> idY" forall y. cmpY idY y = y
     #-}
@@ -272,9 +266,7 @@ cmpYStream (Y unf s1 s2) s = Y unf (s1 . s) s2
 {-# RULES
 "<iterx> cmpY/stream" forall s y. cmpY (liftS s) y = cmpStreamY s y
 "<iterx> cmpYStream/id" forall y. cmpStreamY idStream y = y
-    #-}
 
-{-# RULES
 "<iterx> stream/cmpY" forall s y. cmpY y (liftS s) = cmpYStream y s
 "<iterx> id/cmpYStream" forall y. cmpYStream y idStream = y
     #-}
