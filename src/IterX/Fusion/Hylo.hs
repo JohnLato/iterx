@@ -14,6 +14,9 @@ transduceY,
 
 -- * creating 'Y'
 unfolding,
+
+-- * temporary
+initStream,
 ) where
 
 import Prelude hiding (id, (.))
@@ -23,6 +26,7 @@ import IterX.Exception
 import IterX.Fusion.Fold
 import IterX.Fusion.Stream
 import IterX.Fusion.Unfold
+import IterX.IterX
 
 import Control.Exception.Lifted
 import Control.Category
@@ -278,5 +282,57 @@ foldY finalFold (Y unf s1 s2) =
 unfolding :: Monad m => UnfoldM m a b -> Y m a b
 unfolding unf = Y unf idStream idStream
 
--- initY :: Monad m => Y m i st -> (st -> Y m i o) -> Y m i o
--- initY parser f = 
+
+
+{-# INLINE initStream #-}
+initStream :: (Streaming p, Monad m)
+           => IterX i m st -> (st -> Stream m i o) -> p m i o
+initStream iter f = liftStream $ f2 f . f1 iter
+
+-- the unpacking/repacking we have to do here (esp. in f2) feels
+-- like the wrong thing.  Maybe there's a better way?
+{-# INLINE f1 #-}
+f1 :: Monad m => IterX i m st -> Stream m i (st,i)
+f1 iter = Stream loop StartDelimiter
+  where
+    {-# INLINE [0] loop #-}
+    loop StartDelimiter i = runIter iter i HasMore failX doneX >>= procRes
+    loop (ConsumeDelimiter k) i = k i >>= procRes
+    loop p@(ProcState st) i = return $ Val p (st,i)
+    {-# INLINE [0] procRes #-}
+    procRes res = case res of
+      MoreX k' -> return $ Skip $ ConsumeDelimiter k'
+      DoneX s' rest -> return $ Val (ProcState s') (s',rest)
+      FailX _ err -> throw $ IterFailure $ "<iterx> f1: " ++ err
+
+-- assume that, once we get an 'st', it's constant.
+{-# INLINE [1] f2 #-}
+f2 :: Monad m => (st -> Stream m i o) -> Stream m (st,i) o
+f2 f = Stream loop Nothing
+  where
+    {-# INLINE [0] loop #-}
+    loop Nothing (s,i) = case f s of
+        Stream f' s' -> f' s' i >>= \case
+          Val s'2 o -> return $ Val (Just $ Stream f' s'2) o
+          Skip s'2 -> return $ Skip (Just $ Stream f' s'2)
+          End -> return End
+    loop (Just (Stream f' s')) (_,i) = f' s' i >>= \case
+          Val s'2 o -> return $ Val (Just $ Stream f' s'2) o
+          Skip s'2 -> return $ Skip (Just $ Stream f' s'2)
+          End -> return End
+
+{-
+initY iter0 f = liftStream $ Stream loop StartDelimiter
+  where
+    {-# INLINE [0] loop #-}
+    loop StartDelimiter i = runIter iter0 i HasMore failX doneX >>= procResult
+    procResult res = case res of
+        MoreX k' -> return $ Skip $ ConsumeDelimiter k'
+        DoneX s' r -> g' s' r
+        FailX _ err -> throw $ IterFailure $ "initY: " ++ err
+    g' s rest = let y = f s
+                in undefined
+
+flatten :: Y m i o -> Stream m i o
+flatten = undefined
+-}

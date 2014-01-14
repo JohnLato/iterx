@@ -27,6 +27,7 @@ module IterX.IterX (
 , delimitG
 , delimitN
 , DelState
+, DelStateD(..)
 ) where
 
 import           IterX.Core
