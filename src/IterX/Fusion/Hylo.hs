@@ -31,8 +31,13 @@ import Control.Monad.Base
 import Control.Monad.State
 
 
--- this is basically a hylomorphism, and seems to have the properties I want.
--- 'Y' is even more general than a basic Stream.
+-- | An abstract hylomorphism transformation.
+--
+-- Given an input stream 'i', 'Y' creates a new stream of an
+-- abstract type, performs a hylomorphism (unfold/fold),
+-- and generates an output stream of type 'o'.
+--
+-- 'Y' is more general than a basic Stream.
 data Y m i o where
     Y :: UnfoldM m full elem -> Stream m i full -> Stream m elem o -> Y m i o
 
