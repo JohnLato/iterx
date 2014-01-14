@@ -11,7 +11,38 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
 {-# OPTIONS -Wall #-}
-module IterX.Fusion.Stream where
+module IterX.Fusion.Stream (
+Step (..),
+Stream (..),
+Streaming (..),
+
+-- * running a 'Stream'
+foldS,
+foldMStream,
+foldMStream_,
+runStream_,
+transduceStream,
+
+-- * functions
+-- ** transformers
+maps,
+mapsM,
+filters,
+takes,
+drops,
+preAnnotate,
+postAnnotate,
+
+-- ** aggregating streams
+group,
+groupVec,
+groupVec2,
+-- ** utilities
+liftFoldS,
+
+-- * low-level stuff (exported for fusion rules)
+idStream,
+) where
 
 import Prelude hiding (id, (.))
 import qualified Prelude as P

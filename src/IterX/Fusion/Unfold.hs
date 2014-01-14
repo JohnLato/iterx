@@ -1,7 +1,15 @@
 {-# LANGUAGE GADTs #-}
 
 {-# OPTIONS -Wall #-}
-module IterX.Fusion.Unfold where
+module IterX.Fusion.Unfold (
+UnfoldM(..),
+unfoldIdM,
+
+-- * some common unfoldings
+unfoldList,
+unfoldVec,
+unfoldVec2,
+) where
 
 import qualified Data.Vector.Generic as G
 
