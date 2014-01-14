@@ -277,3 +277,6 @@ foldY finalFold (Y unf s1 s2) =
 {-# INLINE unfolding #-}
 unfolding :: Monad m => UnfoldM m a b -> Y m a b
 unfolding unf = Y unf idStream idStream
+
+-- initY :: Monad m => Y m i st -> (st -> Y m i o) -> Y m i o
+-- initY parser f = 

@@ -120,6 +120,29 @@ dimapStream lf rf (Stream loop s0) = Stream loop' s0
     {-# INLINE [0] loop' #-}
     loop' s b = (liftM . fmap) rf . loop s $ lf b
 
+-- I'm not convinced this instance is a good idea.  Is
+-- it better to require using a parser-like structure (e.g. iterx)
+-- explicitly?
+instance Monad m => Monad (Stream m i) where
+    {-# INLINE return #-}
+    return a = Stream (\_ _ -> return $ Val () a) ()
+    {-# INLINE (>>=) #-}
+    (>>=)  = bindStr
+
+{-# INLINE bindStr #-}
+bindStr :: Monad m => Stream m i a -> (a -> Stream m i b) -> Stream m i b
+bindStr (Stream mf m0) bind_f = Stream loop (Left m0)
+  where
+    {-# INLINE [0] loop #-}
+    loop (Left s) i = mf s i >>= \case
+      Skip s' -> return $ Skip (Left s')
+      Val _s a -> return $ Skip $ Right $ bind_f a
+      End -> return End
+    loop (Right (Stream f2 s2)) i = f2 s2 i >>= \case
+      Val s' b -> return $ Val (Right (Stream f2 s')) b
+      Skip s' -> return $ Skip $ Right $ Stream f2 s'
+      End -> return End
+
 --------------------------------------------------------
 
 {-# INLINE [1] liftFoldS #-}
