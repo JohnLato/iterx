@@ -24,7 +24,6 @@ module IterX.IterX (
 , convStream
 , unfoldConvStream
 
-, iterXToStreamTrans
 , delimitG
 , delimitN
 , DelState
@@ -32,7 +31,6 @@ module IterX.IterX (
 
 import           IterX.Core
 import           IterX.Exception
-import           IterX.StreamTrans
 import           IterX.Unsafe
 
 import           Control.Applicative
@@ -182,22 +180,6 @@ unfoldConvStream mkI st0 = streamGM (f id) (i0 st0)
         DoneX !(st',!e2) rest -> f (acc . (e2:)) (i0 st') rest
         FailX _ err -> throw $ IterFailure $ "unfoldConvStream: " ++ err
     f _acc _other _ = error "unfoldConvStream: other case arrived?"
-
-iterXToStreamTrans :: Monad m => IterX s m (s -> [b]) -> StreamTransM m s [b]
-iterXToStreamTrans iter = StreamTransM $ \s ->
-  runIter iter s HasMore failX doneX >>= \case
-    MoreX k     -> return (step k,[])
-    DoneX f s'  -> finish s' f
-    FailX _s err -> throw $ IterFailure
-            $ "iterXToStreamTrans: " ++ err
-  where
-    finish s f = let f' = StreamTransM $ return . (f',) . f
-                 in return (f',f s)
-    step k = StreamTransM $ k >=> \case
-        DoneX f s   -> finish s f
-        MoreX k'    -> return (step k',[])
-        FailX _s err -> throw $ IterFailure
-            $ "iterXToStreamTrans: " ++ err
 
 -- | create a transducer from a 'delimited stream'.
 delimitG :: Monad m

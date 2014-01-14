@@ -27,7 +27,6 @@ library
                        IterX.Parser,
                        IterX.Parser.Binary,
                        IterX.ReadableChunk,
-                       IterX.StreamTrans,
                        IterX.Unsafe
   -- other-modules:       
   build-depends:       base >=4.6 && <4.7,
