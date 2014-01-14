@@ -1,5 +1,6 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TupleSections #-}
 module Bar where
 
 import Prelude hiding ((.))
@@ -7,6 +8,10 @@ import Control.Category
 import Control.Monad.Base
 import IterX.Fusion
 import IterX.Core
+import IterX.Parser.Binary
+import IterX.IterX
+import Control.Applicative
+import Data.Word
 import qualified Data.Iteratee as I
 import Data.Vector.Unboxed as V
 
@@ -128,6 +133,33 @@ instance I.Nullable (Vector Int) where
 instance I.NullPoint (Vector Int) where
     empty = V.empty
 
+--------------------------------------------------------------
+-- bind-like tests
+
+p1 :: Monad m => IterX (V.Vector Word8) m Int
+p1 = fromIntegral <$> getWord16le
+
+testVec = V.fromList [1..100]
+
+bGen :: Monad m => Producer m (V.Vector Word8)
+bGen = yieldList $ [testVec,testVec,testVec]
+
+-- a full fold, but the type is insane
+-- also, multiple mapG's don't fuse, so I manually combined them
+-- (and the result still isn't as good, although since delimitG is more
+--  powerful than initStream it isn't quite fair yet)
+genBind1 = foldG (\a b -> return $! a+b) 0 . mapG (V.sum . V.map fromIntegral . snd) . delimitG p1 (\s v -> (Left s, [(s,v)]))
+
+streamBind1 = runFold $ foldY sums $ maps fromIntegral . unfolding unfoldVec . maps snd . initStream p1 (\s -> maps (s,))
+
+genBindTest :: IO Int
+genBindTest = genBind1 bGen
+
+streamBindTest :: IO Int
+streamBindTest = streamBind1 bGen
+
+--------------------------------------------------------------
+
 main = defaultMain
   [ bgroup "test2"
       [ bench "unfoldLoop"    (prodTest2b >>= \x -> x `seq` return ())
@@ -153,5 +185,9 @@ main = defaultMain
   , bgroup "test5"
       [ bench "unfoldLoop"    (prodTest5 >>= \x -> x `seq` return ())
       , bench "unfoldLoopNew" (prodTest5b >>= \x -> x `seq` return ())
+      ]
+  , bgroup "binds"
+      [ bench "generator" (genBindTest >>= \x -> x `seq` return ())
+      , bench "stream"    (streamBindTest >>= \x -> x `seq` return ())
       ]
   ]
