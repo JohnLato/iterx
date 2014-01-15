@@ -14,6 +14,8 @@ runFold_,
 -- * creating folds
 folding,
 foldingM,
+-- ** specific folds
+toList,
 sums,
 products,
 count,
@@ -104,3 +106,10 @@ zippingWith cmb (FoldM f1 s1_0 out1) (FoldM f2 s2_0 out2) =
     loop (s1,s2) a = liftM2 (,) (f1 s1 a) (f2 s2 a)
     {-# INLINE [0] mkOut #-}
     mkOut (s1,s2) = liftM2 cmb (out1 s1) (out2 s2)
+
+{-# INLINE toList #-}
+toList :: (Folding p, Monad m) => p m a [a]
+toList = liftFold $ FoldM loop id (return . ($ []))
+  where
+    {-# INLINE [0] loop #-}
+    loop acc el = return $ acc . (el:)
