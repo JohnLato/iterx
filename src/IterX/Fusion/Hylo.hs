@@ -14,6 +14,7 @@ transduceY,
 
 -- * creating 'Y'
 unfolding,
+refolding,
 
 -- * temporary
 initStream,
@@ -232,6 +233,26 @@ foldUnfolding (SUnfoldM unfS0 mkUnf uf) (FoldM f s0 mkOut) =
         Right (a, unfState') -> f foldState a >>= loop2 unfState'
         Left unfState' -> return (unfState',foldState)
 
+-- For each input, unfold it, fold over that, and produce one output.
+-- Essently, undo an UnfoldM.
+-- No fold state is carried over across separate inputs.
+{-# INLINE [1] repeatedFoldUnfolding #-}
+repeatedFoldUnfolding :: Monad m => UnfoldM m a b -> FoldM m b c -> Stream m a c
+repeatedFoldUnfolding (UnfoldM mkUnf uf) (FoldM f s0 mkOut) =
+    Stream (\_ a -> loop (mkUnf a) s0) ()
+  where
+    -- INLINE-ing this is a big loss.
+    loop unfState foldState = uf unfState >>= \case
+        Just (a, unfState') -> f foldState a >>= loop unfState'
+        Nothing -> Val () `liftM` mkOut foldState
+
+repeatedFoldUnfolding (SUnfoldM unfS0 mkUnf uf) (FoldM f s0 mkOut) =
+    Stream (\unfS a -> loop (mkUnf unfS a) s0) unfS0
+  where
+    loop unfState foldState = uf unfState >>= \case
+        Right (a, unfState') -> f foldState a >>= loop unfState'
+        Left unfState' -> Val unfState' `liftM` mkOut foldState
+
 {-# RULES "<iterx> fold/unfoldId" forall f. foldUnfolding unfoldIdM f = f #-}
 
 --------------------------------------------------------
@@ -282,7 +303,11 @@ foldY finalFold (Y unf s1 s2) =
 unfolding :: Monad m => UnfoldM m a b -> Y m a b
 unfolding unf = Y unf idStream idStream
 
-
+{-# INLINE refolding #-}
+refolding :: (Streaming p, MonadBase IO m)
+          => FoldM m b c -> Y m a b -> p m a c
+refolding fold (Y unf s1 s2) =
+    liftStream $ (repeatedFoldUnfolding unf $ foldS fold s2) . s1
 
 {-# INLINE initStream #-}
 initStream :: (Streaming p, Monad m)
