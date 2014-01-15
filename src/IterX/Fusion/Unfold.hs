@@ -28,6 +28,9 @@ unfoldIdM = UnfoldM Just $ \x -> case x of
 
 -- this currently performs much better than the closure-based unfolding
 -- except on the transducer tests
+--
+-- TODO: define something generic using mono-traversable, and maybe
+-- substitute other variants via RULEs.
 {-# INLINE unfoldVec #-}
 unfoldVec :: (G.Vector v a, Monad m) => UnfoldM m (v a) a
 unfoldVec = UnfoldM mkS f
