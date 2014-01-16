@@ -18,6 +18,7 @@ refolding,
 
 -- * temporary
 initStream,
+initStream2,
 ) where
 
 import Prelude hiding (id, (.))
@@ -346,18 +347,25 @@ f2 f = Stream loop Nothing
           Skip s'2 -> return $ Skip (Just $ Stream f' s'2)
           End -> return End
 
-{-
-initY iter0 f = liftStream $ Stream loop StartDelimiter
+newtype Stepper m i o = Stepper (i -> m (Maybe (Maybe o, Stepper m i o)))
+
+{-# INLINE initStream2 #-}
+initStream2 :: (Streaming p, Monad m)
+            => IterX i m st -> (st -> Stream m i o) -> p m i o
+initStream2 iter fStream0 = liftStream $ Stream loop s0
   where
     {-# INLINE [0] loop #-}
-    loop StartDelimiter i = runIter iter0 i HasMore failX doneX >>= procResult
+    loop (Stepper f) i = f i >>= \case
+        Just (Nothing,next) -> return $ Skip next
+        Just (Just o,next)  -> return $ Val next o
+        Nothing             -> return End
+    s0 = Stepper $ \i -> runIter iter i HasMore failX doneX >>= procResult
     procResult res = case res of
-        MoreX k' -> return $ Skip $ ConsumeDelimiter k'
-        DoneX s' r -> g' s' r
-        FailX _ err -> throw $ IterFailure $ "initY: " ++ err
-    g' s rest = let y = f s
-                in undefined
-
-flatten :: Y m i o -> Stream m i o
-flatten = undefined
--}
+        MoreX k' -> return $ Just (Nothing, step2 k')
+        DoneX s' r -> g' (fStream0 s') r
+        FailX _ err -> throw $ IterFailure $ "initStream2: " ++ err
+    step2 k = Stepper $ k >=> procResult
+    g' (Stream f s) i = f s i >>= \case
+        Val s' o -> return $ Just (Just o, Stepper $ g' (Stream f s'))
+        Skip s'  -> return $ Just (Nothing, Stepper $ g' (Stream f s'))
+        End      -> return Nothing
