@@ -13,6 +13,7 @@ import IterX.IterX
 import Control.Applicative
 import Data.Word
 import qualified Data.Iteratee as I
+import Data.ListLike.Vector
 import Data.Vector.Unboxed as V
 
 import Criterion
@@ -127,10 +128,10 @@ vecTest4 = V.map (*2) . V.filter even . V.map (+1)
 vecTest4b :: [V.Vector Int] -> Int
 vecTest4b = V.sum . V.map (*2) . V.filter even . V.map (+1) . V.concat
 
-instance I.Nullable (Vector Int) where
+instance (Unbox a) => I.Nullable (Vector a) where
     nullC = V.null
 
-instance I.NullPoint (Vector Int) where
+instance (Unbox a) => I.NullPoint (Vector a) where
     empty = V.empty
 
 --------------------------------------------------------------
@@ -161,6 +162,13 @@ streamBind1 = runFold $ foldY sums $ maps fromIntegral . unfolding unfoldVec . m
 
 streamBind2 = runFold $ foldY sums $ maps fromIntegral . unfolding unfoldVec . maps snd . initStream2 p1 (\s -> maps (s,))
 
+iterBind :: I.Iteratee (V.Vector Word8) IO Int
+iterBind = do
+    s <- I.endianRead2 I.LSB
+    I.joinI $ I.mapChunks (\v -> V.zip (V.replicate (V.length v) s) v)
+              I.><> I.mapChunks (snd . V.unzip)
+              I.><> I.mapChunks (V.map fromIntegral)
+              $ I.sum
 
 genBindTest :: IO Int
 genBindTest = genBind1 bGen
@@ -168,6 +176,9 @@ genBindTest = genBind1 bGen
 streamBindTest, streamBind2Test :: IO Int
 streamBindTest = streamBind1 bGen
 streamBind2Test = streamBind2 bGen
+
+iterBindTest :: IO Int
+iterBindTest = I.run =<< I.enumList (Prelude.replicate numVecs testVec) iterBind
 
 --------------------------------------------------------------
 
@@ -202,5 +213,6 @@ main = defaultMain
       , bench "stream"    (streamBindTest >>= \x -> x `seq` return ())
       , bench "stream 2"  (streamBind2Test >>= \x -> x `seq` return ())
       , bench "pure vector" $ whnf (pureVecTest) (testVec)
+      , bench "iteratee"  (iterBindTest >>= \x -> x `seq` return ())
       ]
   ]
