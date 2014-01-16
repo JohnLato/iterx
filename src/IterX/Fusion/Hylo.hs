@@ -349,6 +349,9 @@ f2 f = Stream loop Nothing
 
 newtype Stepper m i o = Stepper (i -> m (Maybe (Maybe o, Stepper m i o)))
 
+-- implement the same semantics as initStream by closing over the next
+-- loop.  I'd hoped this would be more efficient, but it does not seem to
+-- be, at least for my minimal test cases thus far.
 {-# INLINE initStream2 #-}
 initStream2 :: (Streaming p, Monad m)
             => IterX i m st -> (st -> Stream m i o) -> p m i o
@@ -359,12 +362,13 @@ initStream2 iter fStream0 = liftStream $ Stream loop s0
         Just (Nothing,next) -> return $ Skip next
         Just (Just o,next)  -> return $ Val next o
         Nothing             -> return End
+    {-# INLINE s0 #-}
     s0 = Stepper $ \i -> runIter iter i HasMore failX doneX >>= procResult
+    {-# INLINE procResult #-}
     procResult res = case res of
-        MoreX k' -> return $ Just (Nothing, step2 k')
+        MoreX k' -> return $ Just (Nothing, Stepper $ k' >=> procResult)
         DoneX s' r -> g' (fStream0 s') r
         FailX _ err -> throw $ IterFailure $ "initStream2: " ++ err
-    step2 k = Stepper $ k >=> procResult
     g' (Stream f s) i = f s i >>= \case
         Val s' o -> return $ Just (Just o, Stepper $ g' (Stream f s'))
         Skip s'  -> return $ Just (Nothing, Stepper $ g' (Stream f s'))
