@@ -142,11 +142,14 @@ p1 = fromIntegral <$> getWord16le
 testVec :: V.Vector Word8
 testVec = V.fromList [1..100]
 
+numVecs :: Int
+numVecs = 20
+
 bGen :: Monad m => Producer m (V.Vector Word8)
-bGen = yieldList $ Prelude.replicate 20 testVec
+bGen = yieldList $ Prelude.replicate numVecs testVec
 
 pureVecTest :: V.Vector Word8 -> Int
-pureVecTest = V.sum . V.map fromIntegral . V.concat . Prelude.replicate 20
+pureVecTest = V.sum . V.map fromIntegral . V.concat . Prelude.replicate numVecs
 
 -- a full fold, but the type is insane
 -- also, multiple mapG's don't fuse, so I manually combined them
@@ -156,7 +159,6 @@ genBind1 = foldG (\a b -> return $! a+b) 0 . mapG (V.sum . V.map fromIntegral . 
 
 streamBind1 = runFold $ foldY sums $ maps fromIntegral . unfolding unfoldVec . maps snd . initStream p1 (\s -> maps (s,))
 
--- streamBind2 :: Producer (forall t. t IO) (V.Vector Word8) -> IO Int
 streamBind2 = runFold $ foldY sums $ maps fromIntegral . unfolding unfoldVec . maps snd . initStream2 p1 (\s -> maps (s,))
 
 
