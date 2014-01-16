@@ -156,11 +156,16 @@ genBind1 = foldG (\a b -> return $! a+b) 0 . mapG (V.sum . V.map fromIntegral . 
 
 streamBind1 = runFold $ foldY sums $ maps fromIntegral . unfolding unfoldVec . maps snd . initStream p1 (\s -> maps (s,))
 
+-- streamBind2 :: Producer (forall t. t IO) (V.Vector Word8) -> IO Int
+streamBind2 = runFold $ foldY sums $ maps fromIntegral . unfolding unfoldVec . maps snd . initStream2 p1 (\s -> maps (s,))
+
+
 genBindTest :: IO Int
 genBindTest = genBind1 bGen
 
-streamBindTest :: IO Int
+streamBindTest, streamBind2Test :: IO Int
 streamBindTest = streamBind1 bGen
+streamBind2Test = streamBind2 bGen
 
 --------------------------------------------------------------
 
@@ -193,6 +198,7 @@ main = defaultMain
   , bgroup "binds"
       [ bench "generator" (genBindTest >>= \x -> x `seq` return ())
       , bench "stream"    (streamBindTest >>= \x -> x `seq` return ())
+      , bench "stream 2"  (streamBind2Test >>= \x -> x `seq` return ())
       , bench "pure vector" $ whnf (pureVecTest) (testVec)
       ]
   ]
