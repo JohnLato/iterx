@@ -139,10 +139,14 @@ instance I.NullPoint (Vector Int) where
 p1 :: Monad m => IterX (V.Vector Word8) m Int
 p1 = fromIntegral <$> getWord16le
 
+testVec :: V.Vector Word8
 testVec = V.fromList [1..100]
 
 bGen :: Monad m => Producer m (V.Vector Word8)
-bGen = yieldList $ [testVec,testVec,testVec]
+bGen = yieldList $ Prelude.replicate 20 testVec
+
+pureVecTest :: V.Vector Word8 -> Int
+pureVecTest = V.sum . V.map fromIntegral . V.concat . Prelude.replicate 20
 
 -- a full fold, but the type is insane
 -- also, multiple mapG's don't fuse, so I manually combined them
@@ -189,5 +193,6 @@ main = defaultMain
   , bgroup "binds"
       [ bench "generator" (genBindTest >>= \x -> x `seq` return ())
       , bench "stream"    (streamBindTest >>= \x -> x `seq` return ())
+      , bench "pure vector" $ whnf (pureVecTest) (testVec)
       ]
   ]
