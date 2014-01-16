@@ -332,7 +332,7 @@ f1 iter = Stream loop StartDelimiter
       FailX _ err -> throw $ IterFailure $ "<iterx> f1: " ++ err
 
 -- assume that, once we get an 'st', it's constant.
-{-# INLINE [1] f2 #-}
+{-# INLINE f2 #-}
 f2 :: Monad m => (st -> Stream m i o) -> Stream m (st,i) o
 f2 f = Stream loop Nothing
   where
