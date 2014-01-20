@@ -1,6 +1,9 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 {-# OPTIONS -Wall #-}
 module IterX.Fusion.Fold (
@@ -20,16 +23,26 @@ sums,
 products,
 count,
 zippingWith,
+
+filtering,
+foldVec,
+initFold,
 ) where
 
 import Prelude hiding (id, (.))
 import qualified Prelude as P
 import IterX.Core
+import IterX.IterX
 
 import Control.Category
 import Data.Profunctor
+import qualified Data.Vector.Generic as G
+import qualified Data.Vector.Generic.Mutable as GM
 import Control.Monad
+import Control.Monad.Base
 import Control.Monad.State
+
+import GHC.IO (unsafeDupablePerformIO)
 
 --------------------------------------------------------
 
@@ -92,6 +105,14 @@ products = folding (*) 1
 count :: (Folding p, Num cnt, Monad m) => p m a cnt
 count = folding (\b _ -> b+1) 0
 
+{-# INLINE [1] filtering #-}
+filtering :: Monad m => (a->Bool) -> FoldM m a b -> FoldM m a b
+filtering p (FoldM f s0 out) = FoldM f' s0 out
+  where
+    {-# INLINE [0] f' #-}
+    f' s a | p a = f s a
+           | otherwise = return s
+
 {-# INLINE zippingWith #-}
 zippingWith
   :: (Folding p, Monad m)
@@ -113,3 +134,51 @@ toList = liftFold $ FoldM loop id (return . ($ []))
   where
     {-# INLINE [0] loop #-}
     loop acc el = return $ acc . (el:)
+
+{-# INLINE [1] foldVec #-}
+foldVec :: (MonadBase IO m, G.Vector v i) => Int -> FoldM m (v i) b -> FoldM m i b
+foldVec n (FoldM ff fs0 fOut)
+    | n > 1 = FoldM loop (unsafeDupablePerformIO (GM.unsafeNew n),0,fs0) (fOut . (\(_,_,fs) -> fs))
+    | n == 1 = error "TODO: implement for 1"
+    | otherwise = error $ "<iterx> foldVec: n " ++ show n
+  where
+    {-# INLINE [0] loop #-}
+    loop (v,thisIx,fs) i
+        | thisIx == n-1 = do
+            (v',v'2) <- liftBase $ do
+                GM.unsafeWrite v thisIx i
+                v' <- G.unsafeFreeze v
+                v'2 <- GM.unsafeNew n
+                return (v',v'2)
+            fs' <- ff fs v'
+            return (v'2,0,fs')
+        | otherwise = liftBase $ do
+            GM.unsafeWrite v thisIx i
+            return (v,thisIx+1,fs)
+
+initFold :: (Monad m)
+         => IterX i m st -> (st -> FoldM m i o) -> o -> FoldM m i o
+initFold iter sel o0 = FoldM loop (StartDelimiter) extract
+  where
+    {-# INLINE [0] extract #-}
+    extract (ProcState (FoldM f s out)) = out s
+    extract (_) = return o0
+    {-# INLINE [0] loop #-}
+    loop (ProcState fold) i = do
+        fold' <- stepFold fold i
+        return $ ProcState fold'
+    loop (StartDelimiter) i = runIter iter i HasMore failX doneX >>= procRes
+    loop (ConsumeDelimiter k) i = k i >>= procRes
+    {-# INLINE [0] procRes #-}
+    procRes res = case res of
+      MoreX k' -> return $ ConsumeDelimiter k'
+      DoneX s' rest -> do
+          let ifold = sel s'
+          fold' <- stepFold ifold rest
+          return (ProcState fold')
+
+stepFold :: Monad m => FoldM m i o -> i -> m (FoldM m i o)
+stepFold (FoldM f s out) i = do
+    s' <- f s i
+    return $ FoldM f s' out
+
