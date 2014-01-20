@@ -19,6 +19,7 @@ refolding,
 -- * temporary
 initStream,
 initStream2,
+foldUnfolding,
 ) where
 
 import Prelude hiding (id, (.))

@@ -11,6 +11,7 @@ import IterX.Core
 import IterX.Parser.Binary
 import IterX.IterX
 import Control.Applicative
+import Data.Profunctor
 import Data.Word
 import qualified Data.Iteratee as I
 import Data.ListLike.Vector
@@ -181,10 +182,30 @@ iterBindTest :: IO Int
 iterBindTest = I.run =<< I.enumList (Prelude.replicate numVecs testVec) iterBind
 
 --------------------------------------------------------------
+-- using just FoldM
+
+foldTest2 :: IO Int
+foldTest2 = runFold (foldUnfolding unfoldVec count) gen1
+
+foldTest3 :: IO Int
+foldTest3 = runFold (foldUnfolding unfoldVec . lmap (+1) $ lmap (*2) sums) gen1
+
+foldTest4 :: IO Int
+foldTest4 = runFold (foldUnfolding unfoldVec . lmap (+1) . filtering even $ lmap (*2) sums) gen1
+
+foldTest5 :: IO Int
+foldTest5 = runFold (foldUnfolding unfoldVec $ lmap (+1) $ filtering even $ foldVec 2 (count :: FoldM IO (V.Vector Int) Int)) gen1
+
+foldBind1 =   runFold (initFold p1 ( \st -> lmap (st,) . lmap snd . foldUnfolding unfoldVec $ lmap fromIntegral sums) 0)
+
+foldBindTest :: IO Int
+foldBindTest = foldBind1 bGen
+--------------------------------------------------------------
 
 main = defaultMain
   [ bgroup "test2"
       [ bench "unfoldLoop"    (prodTest2b >>= \x -> x `seq` return ())
+      , bench "foldM"         (foldTest2 >>= \x -> x `seq` return ())
       , bench "justVector"  $ whnf (V.sum . V.concat) [v1,v1]
       , bench "allProducer"   (prodTest2c >>= \x -> x `seq` return ())
       , bench "iteratee"      (iterTest2 >>= \x -> x `seq` return ())
@@ -192,11 +213,13 @@ main = defaultMain
       ]
   , bgroup "test3"
       [ bench "unfoldLoop"    (prodTest3 >>= \x -> x `seq` return ())
+      , bench "foldM"         (foldTest3 >>= \x -> x `seq` return ())
       , bench "justVector"  $ whnf (V.sum . vecTest3 . V.concat) [v1,v1]
       , bench "justVector b" $ whnf (vecTest3b) [v1,v1]
       ]
   , bgroup "test4"
       [ bench "unfoldLoop"    (prodTest4  >>= \x -> x `seq` return ())
+      , bench "foldM"         (foldTest4 >>= \x -> x `seq` return ())
       , bench "transduce"     (prodTest4b >>= \x -> x `seq` return ())
       , bench "transduce closure" (prodTest4b1 >>= \x -> x `seq` return ())
       , bench "transduce 2"   (prodTest4c >>= \x -> x `seq` return ())
@@ -207,12 +230,14 @@ main = defaultMain
   , bgroup "test5"
       [ bench "unfoldLoop"    (prodTest5 >>= \x -> x `seq` return ())
       , bench "unfoldLoopNew" (prodTest5b >>= \x -> x `seq` return ())
+      , bench "foldM"         (foldTest5 >>= \x -> x `seq` return ())
       ]
   , bgroup "binds"
       [ bench "generator" (genBindTest >>= \x -> x `seq` return ())
       , bench "stream"    (streamBindTest >>= \x -> x `seq` return ())
       , bench "stream 2"  (streamBind2Test >>= \x -> x `seq` return ())
+      , bench "foldM"     (foldBindTest >>= \x -> x `seq` return ())
       , bench "pure vector" $ whnf (pureVecTest) (testVec)
-      , bench "iteratee"  (iterBindTest >>= \x -> x `seq` return ())
+      -- , bench "iteratee"  (iterBindTest >>= \x -> x `seq` return ())
       ]
   ]

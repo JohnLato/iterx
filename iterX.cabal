@@ -53,6 +53,7 @@ benchmark bench.hs
       base,
       iterX,
       iteratee   >= 0.8.4.2 && < 0.10,
+      profunctors,
       vector,
       transformers-base >= 0.4,
       listlike-instances,
