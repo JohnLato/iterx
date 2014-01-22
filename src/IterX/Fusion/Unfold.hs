@@ -1,9 +1,11 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 
 {-# OPTIONS -Wall #-}
 module IterX.Fusion.Unfold (
 UnfoldM(..),
 unfoldIdM,
+foldUnfolding,
 
 -- * some common unfoldings
 unfoldList,
@@ -12,6 +14,7 @@ unfoldVec2,
 ) where
 
 import qualified Data.Vector.Generic as G
+import IterX.Fusion.Fold
 
 -- -----------------------------------------
 -- Unfoldings
@@ -25,6 +28,24 @@ unfoldIdM :: Monad m => UnfoldM m a a
 unfoldIdM = UnfoldM Just $ \x -> case x of
     Just a  -> return $ Just (a,Nothing)
     Nothing -> return Nothing
+
+-- Fold over an unfolding.
+{-# INLINE [1] foldUnfolding #-}
+foldUnfolding :: Monad m => UnfoldM m a b -> FoldM m b c -> FoldM m a c
+foldUnfolding (UnfoldM mkUnf uf) (FoldM f s0 mkOut) =
+    FoldM (\s a -> loop2 (mkUnf a) s) s0 mkOut
+  where
+    -- INLINE-ing this is a big loss.
+    loop2 unfState foldState = uf unfState >>= \case
+        Just (a, unfState') -> f foldState a >>= loop2 unfState'
+        Nothing -> return foldState
+foldUnfolding (SUnfoldM unfS0 mkUnf uf) (FoldM f s0 mkOut) =
+    FoldM (\(unfS,s) a -> loop2 (mkUnf unfS a) s) (unfS0,s0) (mkOut.snd)
+  where
+    loop2 unfState foldState = uf unfState >>= \case
+        Right (a, unfState') -> f foldState a >>= loop2 unfState'
+        Left unfState' -> return (unfState',foldState)
+
 
 -- this currently performs much better than the closure-based unfolding
 -- except on the transducer tests

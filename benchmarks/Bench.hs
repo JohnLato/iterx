@@ -42,26 +42,19 @@ gen1 = yieldList [v1,v1]
 gen2 :: Monad m => Producer m (V.Vector Int)
 gen2 = yieldList $ Prelude.replicate 100 v1
 
-collectTest :: IO Int
-collectTest = runFold (foldY (count :: FoldM IO (V.Vector Int) Int)
-    $ groupVec 6 . filters even . unfolding unfoldVec) (yieldList [v1,v1])
-
-
 prodTest1 :: IO Int
 prodTest1 = runFold count gen1
-
--- this is faster than the closer variant so far
-prodTest2b :: IO Int
-prodTest2b = runFold (foldY count $ unfolding unfoldVec) gen1
 
 prodTest2c :: IO Int
 prodTest2c = foldG (\a b -> return $! a+b) 0 $ mapsG V.toList gen1
 
 -- do I want to flip the order of everything?  I'd lose profunctor, unless
 -- I create my own composition operator
+{-
 prodTest3 :: IO Int
 prodTest3 = runFold (foldY sums
     $ maps (*2) . maps (+1) . unfolding unfoldVec) gen1
+    -}
 
 vecTest3 :: V.Vector Int -> V.Vector Int
 vecTest3 = V.map (*2) . V.map (+1)
@@ -77,42 +70,9 @@ iterTest2b :: IO Int
 iterTest2b = I.run =<< I.enumList [v1,v1] (I.joinI $ I.mapChunks (\x -> (:[]) $! V.sum x) I.sum)
 
 
-prodTest4 :: IO Int
-prodTest4 = runFold (foldY sums
-    $ maps (*2) . filters even . maps (+1) . unfolding unfoldVec) gen1
-
-prodTest4b :: IO Int
-prodTest4b = runFold sums
-    $ transduceY (maps (*2) . filters even . maps (+1) . unfolding unfoldVec)
-      gen1
-
-prodTest4b1 :: IO Int
-prodTest4b1 = runFold sums
-    $ transduceY (maps (*2) . filters even . maps (+1) . unfolding unfoldVec2)
-      gen1
-
-prodTest4c :: IO Int
-prodTest4c = foldG (\a b -> return $! a+b) 0
-    $ transduceY (maps (*2) . filters even . maps (+1) . unfolding unfoldVec)
-      gen1
-
-prodTest4c1 :: IO Int
-prodTest4c1 = foldG (\a b -> return $! a+b) 0
-    $ transduceY (maps (*2) . filters even . maps (+1) . unfolding unfoldVec2)
-      gen1
-
 -- ------------------------------------------
 
--- one problem with this is that there's no way to terminate and get a
--- partial value out.  If I use a Fold, then I'd produce a value at every
--- step.  What I really want is like a Stream but with a finalizer...
--- But how do I know it's over?
---   feed an input that throws an exception on eval?  Seems ugly.
---   FoldM m i (Bool, o) ?
---   make something like a Stream but with an extra 's->o' function?
-
-ufv = unfoldVec :: UnfoldM IO (V.Vector Int) Int
-
+{-
 prodTest5 :: IO Int
 prodTest5 = runFold (foldY (count :: FoldM IO (V.Vector Int) Int)
     $ groupVec 2 . filters even . maps (+1) . unfolding unfoldVec) gen1
@@ -120,6 +80,7 @@ prodTest5 = runFold (foldY (count :: FoldM IO (V.Vector Int) Int)
 prodTest5b :: IO Int
 prodTest5b = runFold (foldY (count :: FoldM IO (V.Vector Int) Int)
     $ groupVec2 2 . filters even . maps (+1) . unfolding unfoldVec) gen1
+-}
 
 -- ------------------------------------------
 
@@ -159,10 +120,6 @@ pureVecTest = V.sum . V.map fromIntegral . V.concat . Prelude.replicate numVecs
 --  powerful than initStream it isn't quite fair yet)
 genBind1 = foldG (\a b -> return $! a+b) 0 . mapG (V.sum . V.map fromIntegral . snd) . delimitG p1 (\s v -> (Left s, [(s,v)]))
 
-streamBind1 = runFold $ foldY sums $ maps fromIntegral . unfolding unfoldVec . maps snd . initStream p1 (\s -> maps (s,))
-
-streamBind2 = runFold $ foldY sums $ maps fromIntegral . unfolding unfoldVec . maps snd . initStream2 p1 (\s -> maps (s,))
-
 iterBind :: I.Iteratee (V.Vector Word8) IO Int
 iterBind = do
     s <- I.endianRead2 I.LSB
@@ -173,10 +130,6 @@ iterBind = do
 
 genBindTest :: IO Int
 genBindTest = genBind1 bGen
-
-streamBindTest, streamBind2Test :: IO Int
-streamBindTest = streamBind1 bGen
-streamBind2Test = streamBind2 bGen
 
 iterBindTest :: IO Int
 iterBindTest = I.run =<< I.enumList (Prelude.replicate numVecs testVec) iterBind
@@ -204,38 +157,27 @@ foldBindTest = foldBind1 bGen
 
 main = defaultMain
   [ bgroup "test2"
-      [ bench "unfoldLoop"    (prodTest2b >>= \x -> x `seq` return ())
-      , bench "foldM"         (foldTest2 >>= \x -> x `seq` return ())
+      [ bench "foldM"         (foldTest2 >>= \x -> x `seq` return ())
       , bench "justVector"  $ whnf (V.sum . V.concat) [v1,v1]
       , bench "allProducer"   (prodTest2c >>= \x -> x `seq` return ())
       , bench "iteratee"      (iterTest2 >>= \x -> x `seq` return ())
       , bench "iteratee_b"    (iterTest2b >>= \x -> x `seq` return ())
       ]
   , bgroup "test3"
-      [ bench "unfoldLoop"    (prodTest3 >>= \x -> x `seq` return ())
-      , bench "foldM"         (foldTest3 >>= \x -> x `seq` return ())
+      [ bench "foldM"         (foldTest3 >>= \x -> x `seq` return ())
       , bench "justVector"  $ whnf (V.sum . vecTest3 . V.concat) [v1,v1]
       , bench "justVector b" $ whnf (vecTest3b) [v1,v1]
       ]
   , bgroup "test4"
-      [ bench "unfoldLoop"    (prodTest4  >>= \x -> x `seq` return ())
-      , bench "foldM"         (foldTest4 >>= \x -> x `seq` return ())
-      , bench "transduce"     (prodTest4b >>= \x -> x `seq` return ())
-      , bench "transduce closure" (prodTest4b1 >>= \x -> x `seq` return ())
-      , bench "transduce 2"   (prodTest4c >>= \x -> x `seq` return ())
-      , bench "transduce 2 closure"   (prodTest4c1 >>= \x -> x `seq` return ())
+      [ bench "foldM"         (foldTest4 >>= \x -> x `seq` return ())
       , bench "justVector"  $ whnf (V.sum . vecTest4 . V.concat) [v1,v1]
       , bench "justVector b" $ whnf (vecTest4b) [v1,v1]
       ]
   , bgroup "test5"
-      [ bench "unfoldLoop"    (prodTest5 >>= \x -> x `seq` return ())
-      , bench "unfoldLoopNew" (prodTest5b >>= \x -> x `seq` return ())
-      , bench "foldM"         (foldTest5 >>= \x -> x `seq` return ())
+      [ bench "foldM"         (foldTest5 >>= \x -> x `seq` return ())
       ]
   , bgroup "binds"
       [ bench "generator" (genBindTest >>= \x -> x `seq` return ())
-      , bench "stream"    (streamBindTest >>= \x -> x `seq` return ())
-      , bench "stream 2"  (streamBind2Test >>= \x -> x `seq` return ())
       , bench "foldM"     (foldBindTest >>= \x -> x `seq` return ())
       , bench "pure vector" $ whnf (pureVecTest) (testVec)
       -- , bench "iteratee"  (iterBindTest >>= \x -> x `seq` return ())
