@@ -33,8 +33,10 @@ import Prelude hiding (id, (.))
 import qualified Prelude as P
 import IterX.Core
 import IterX.IterX
+import IterX.Exception
 
 import Control.Category
+import qualified Control.Exception as E
 import Data.Profunctor
 import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Generic.Mutable as GM
@@ -57,6 +59,8 @@ data FoldM m a b where
 instance Monad m => Profunctor (FoldM m) where
     {-# INLINE dimap #-}
     dimap = dimapFold
+    {-# INLINE lmap #-}
+    lmap  = lmapFold
 
 {-# INLINE [1] dimapFold #-}
 dimapFold :: Monad m => (a->b) -> (c->d) -> FoldM m b c -> FoldM m a d
@@ -64,6 +68,14 @@ dimapFold lf rf (FoldM loop s0 mkOut) = FoldM loop' s0 (liftM rf . mkOut)
   where
     {-# INLINE [0] loop' #-}
     loop' s a = loop s $ lf a
+
+{-# INLINE [1] lmapFold #-}
+lmapFold :: Monad m => (a->b) -> FoldM m b c -> FoldM m a c
+lmapFold lf (FoldM loop s0 mkOut) = FoldM loop' s0 mkOut
+  where
+    {-# INLINE [0] loop' #-}
+    loop' s a = loop s $ lf a
+
 
 -- -----------------------------------------
 
@@ -156,14 +168,15 @@ foldVec n (FoldM ff fs0 fOut)
             GM.unsafeWrite v thisIx i
             return (v,thisIx+1,fs)
 
+{-# INLINE [1] initFold #-}
 initFold :: (Monad m)
          => IterX i m st -> (st -> FoldM m i o) -> o -> FoldM m i o
 initFold iter sel o0 = FoldM loop (StartDelimiter) extract
   where
-    {-# INLINE [0] extract #-}
-    extract (ProcState (FoldM f s out)) = out s
+    {-# INLINE extract #-}
+    extract (ProcState (FoldM _ s out)) = out s
     extract (_) = return o0
-    {-# INLINE [0] loop #-}
+    {-# INLINE loop #-}
     loop (ProcState fold) i = do
         fold' <- stepFold fold i
         return $ ProcState fold'
@@ -176,6 +189,8 @@ initFold iter sel o0 = FoldM loop (StartDelimiter) extract
           let ifold = sel s'
           fold' <- stepFold ifold rest
           return (ProcState fold')
+      FailX _ err -> E.throw $
+          IterFailure $ "<iterx> initFold failure: " ++ err
 
 stepFold :: Monad m => FoldM m i o -> i -> m (FoldM m i o)
 stepFold (FoldM f s out) i = do
