@@ -3,5 +3,4 @@ module IterX.Fusion (
 ) where
 
 import IterX.Fusion.Fold   as M
-import IterX.Fusion.Stream as M
 import IterX.Fusion.Unfold as M

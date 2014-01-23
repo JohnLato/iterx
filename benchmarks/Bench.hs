@@ -23,18 +23,6 @@ import Criterion.Main
 v1 :: V.Vector Int
 v1 = V.enumFromN 1 10
 
-modV1 :: Monad m => Stream m Int Int
-modV1 = maps (+1)
-
-modV2 :: Monad m => Stream m Int Int
-modV2 = maps (+1) . maps (*2)
-
-modV3 :: Monad m => Stream m Int Int
-modV3 = maps (*2) . filters even . maps (+1)
-
-
--- these all fuse nicely.  Very nicely indeed.
-
 -------------------------------------------------------------
 gen1 :: Monad m => Producer m (V.Vector Int)
 gen1 = yieldList [v1,v1]

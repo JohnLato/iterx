@@ -19,7 +19,6 @@ library
                        IterX.Core,
                        IterX.Exception,
                        IterX.Fusion.Fold,
-                       IterX.Fusion.Stream,
                        IterX.Fusion.Unfold,
                        IterX.Fusion,
                        IterX.IterX,
