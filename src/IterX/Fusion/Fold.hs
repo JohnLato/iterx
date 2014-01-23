@@ -24,7 +24,6 @@ products,
 count,
 zippingWith,
 
-filtering,
 foldVec,
 initFold,
 ) where
@@ -116,14 +115,6 @@ products = folding (*) 1
 {-# INLINE count #-}
 count :: (Folding p, Num cnt, Monad m) => p m a cnt
 count = folding (\b _ -> b+1) 0
-
-{-# INLINE [1] filtering #-}
-filtering :: Monad m => (a->Bool) -> FoldM m a b -> FoldM m a b
-filtering p (FoldM f s0 out) = FoldM f' s0 out
-  where
-    {-# INLINE [0] f' #-}
-    f' s a | p a = f s a
-           | otherwise = return s
 
 {-# INLINE zippingWith #-}
 zippingWith

@@ -1,0 +1,75 @@
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RankNTypes #-}
+
+{-# OPTIONS -Wall #-}
+module IterX.Fusion.Transforms (
+maps,
+mapsM,
+filters,
+filterMaybe,
+scans,
+
+cmap,
+foldUnfolding,
+) where
+
+import IterX.Fusion.Fold
+import IterX.Fusion.Unfold
+import Data.Profunctor
+import Data.Maybe as Maybe
+
+type Transform m1 m2 a b = forall c. FoldM m1 b c -> FoldM m2 a c
+type Transform' m a b = Transform m m a b
+
+maps :: Monad m => (a -> b) -> Transform' m a b
+maps f = lmap f
+
+{-# INLINE [1] mapsM #-}
+mapsM :: Monad m => (a -> m b) -> Transform' m a b
+mapsM f (FoldM ff s0 mkOut) = FoldM loop s0 mkOut
+  where
+    {-# INLINE [0] loop #-}
+    loop s a = f a >>= ff s
+
+{-# INLINE [1] filters #-}
+filters :: Monad m => (a->Bool) -> Transform' m a a
+filters p (FoldM f s0 mkOut) = FoldM f' s0 mkOut
+  where
+    {-# INLINE [0] f' #-}
+    f' s a | p a = f s a
+           | otherwise = return s
+
+{-# INLINE filterMaybe #-}
+filterMaybe :: Monad m => Transform' m (Maybe a) a
+filterMaybe = filters Maybe.isJust . maps fromJust
+
+{-# INLINE [1] scans #-}
+scans :: Monad m => FoldM m a b -> Transform' m a b
+scans (FoldM scf scs0 scOut) (FoldM ff s0 fOut) =
+    FoldM f' (scs0,s0) (fOut . snd)
+  where
+    {-# INLINE [0] f' #-}
+    f' (scs,fs) a = do
+        scs' <- scf scs a
+        fs' <- ff fs =<< scOut scs'
+        return (scs',fs')
+
+cmap :: Monad m => (a -> [b]) -> Transform' m a b
+cmap f = maps f . foldUnfolding unfoldList
+
+-- Fold over an unfolding.
+{-# INLINE [1] foldUnfolding #-}
+foldUnfolding :: Monad m => UnfoldM m a b -> FoldM m b c -> FoldM m a c
+foldUnfolding (UnfoldM mkUnf uf) (FoldM f s0 mkOut) =
+    FoldM (\s a -> loop2 (mkUnf a) s) s0 mkOut
+  where
+    -- INLINE-ing this is a big loss.
+    loop2 unfState foldState = uf unfState >>= \case
+        Just (a, unfState') -> f foldState a >>= loop2 unfState'
+        Nothing -> return foldState
+foldUnfolding (SUnfoldM unfS0 mkUnf uf) (FoldM f s0 mkOut) =
+    FoldM (\(unfS,s) a -> loop2 (mkUnf unfS a) s) (unfS0,s0) (mkOut.snd)
+  where
+    loop2 unfState foldState = uf unfState >>= \case
+        Right (a, unfState') -> f foldState a >>= loop2 unfState'
+        Left unfState' -> return (unfState',foldState)
