@@ -132,15 +132,23 @@ foldTest3 :: IO Int
 foldTest3 = runFold (foldUnfolding unfoldVec . lmap (+1) $ lmap (*2) sums) gen1
 
 foldTest4 :: IO Int
-foldTest4 = runFold (foldUnfolding unfoldVec . lmap (+1) . filtering even $ lmap (*2) sums) gen1
+foldTest4 = runFold (foldUnfolding unfoldVec . lmap (+1) . filters even $ lmap (*2) sums) gen1
 
 foldTest5 :: IO Int
-foldTest5 = runFold (foldUnfolding unfoldVec $ lmap (+1) $ filtering even $ foldVec 2 (count :: FoldM IO (V.Vector Int) Int)) gen1
+foldTest5 = runFold (foldUnfolding unfoldVec $ lmap (+1) $ filters even $ foldVec 2 (count :: FoldM IO (V.Vector Int) Int)) gen1
 
 foldBind1 =   runFold (initFold p1 ( \st -> lmap (st,) . lmap snd . foldUnfolding unfoldVec $ lmap fromIntegral sums) 0)
 
 foldBindTest :: IO Int
 foldBindTest = foldBind1 bGen
+
+foldCmap :: IO Int
+foldCmap = runFold (foldUnfolding unfoldVec $ cmap (\a -> Prelude.replicate a (a-1)) sums) gen1
+
+listCmap :: Int -> Int -> Int
+listCmap nMax nReps =
+    Prelude.sum [ a | z <- [1..nReps], x <- [1..nMax], a <- Prelude.replicate x (x-1)]
+
 --------------------------------------------------------------
 
 main = defaultMain
@@ -169,5 +177,9 @@ main = defaultMain
       , bench "foldM"     (foldBindTest >>= \x -> x `seq` return ())
       , bench "pure vector" $ whnf (pureVecTest) (testVec)
       -- , bench "iteratee"  (iterBindTest >>= \x -> x `seq` return ())
+      ]
+  , bgroup "concatmap"
+      [ bench "foldM"     (foldCmap >>= \x -> x `seq` return ())
+      , bench "listy"   $ whnf (uncurry listCmap) (10,2)
       ]
   ]
