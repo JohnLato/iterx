@@ -12,7 +12,6 @@ scans,
 
 cmap,
 cmap',
-foldCmap,
 foldUnfolding,
 ) where
 
@@ -20,7 +19,6 @@ import IterX.Fusion.Fold
 import IterX.Fusion.Unfold
 import Data.Profunctor
 import Data.Maybe as Maybe
-import GHC.Exts (build)
 
 type Transform m1 m2 a b = forall c. FoldM m1 b c -> FoldM m2 a c
 type Transform' m a b = Transform m m a b
@@ -91,29 +89,3 @@ foldUnfolding (SUnfoldM unfS0 mkUnf uf) (FoldM f s0 mkOut) =
     loop2 unfState foldState = uf unfState >>= \case
         Right (a, unfState') -> f foldState a >>= loop2 unfState'
         Left unfState' -> return (unfState',foldState)
-
--- this is a lot of extra work to attempt to work well with foldr/build
--- fusion.  And the performance still isn't as good as the plain code.
---
-{-# INLINE foldCmap #-}
-foldCmap :: Monad m => (a -> [b]) -> Transform' m a b
-foldCmap f (FoldM ff s0 mkOut) = FoldM (\s a -> foldLoop ff (f a) s) s0 mkOut
-  -- where
-    -- {-# INLINE inner #-}
-    -- inner s a = foldLoop ff (f a) s
-
-{-# INLINE [1] foldLoop #-}
-foldLoop :: Monad m => (s -> b -> m s) -> [b] -> s -> m s
-foldLoop ff = go
-  where
-    go []     foldState = return foldState
-    go (b:bs) foldState = ff foldState b >>= go bs
-
-{-# INLINE [0] foldLoop' #-}
-foldLoop' :: (Monad m) => (s -> b -> m s) -> (forall x. (b->x->x) -> x -> x) -> s -> m s
-foldLoop' f g0 s = g0 (\a g s -> (f s a) >>= g) return s
-
-{-# RULES
-"<iterx>cmap" forall f.  maps f . foldUnfolding unfoldList = foldCmap f
-"<iterx>cmap/build" forall f (g :: forall b. (a->b->b)->b->b). foldLoop f (build g) = foldLoop' f g
-      #-}
