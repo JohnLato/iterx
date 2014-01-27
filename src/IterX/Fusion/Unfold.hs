@@ -10,6 +10,8 @@ unfoldIdM,
 unfoldList,
 unfoldVec,
 unfoldVec2,
+
+uReplicate,
 ) where
 
 import qualified Data.Vector.Generic as G
@@ -26,6 +28,12 @@ unfoldIdM :: Monad m => UnfoldM m a a
 unfoldIdM = UnfoldM Just $ \x -> case x of
     Just a  -> return $ Just (a,Nothing)
     Nothing -> return Nothing
+
+{-# INLINE uReplicate #-}
+uReplicate :: Monad m => Int -> a -> UnfoldM m () a
+uReplicate n a = UnfoldM (const 0) $ \n' -> if n' < n
+    then return $ Just (a,(n'+1))
+    else return Nothing
 
 -- this currently performs much better than the closure-based unfolding
 -- except on the transducer tests

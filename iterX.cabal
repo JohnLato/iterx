@@ -57,7 +57,7 @@ benchmark bench.hs
       transformers-base >= 0.4,
       listlike-instances,
       criterion  >= 0.6 && < 0.9
-  ghc-options: -O2
+  ghc-options: -O2 -dsuppress-coercions
 
 source-repository head
   type:                git

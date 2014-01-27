@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 {-# OPTIONS -Wall #-}
 module IterX.Fusion.Transforms (
@@ -10,6 +11,8 @@ filterMaybe,
 scans,
 
 cmap,
+cmap',
+foldCmap,
 foldUnfolding,
 ) where
 
@@ -17,6 +20,7 @@ import IterX.Fusion.Fold
 import IterX.Fusion.Unfold
 import Data.Profunctor
 import Data.Maybe as Maybe
+import GHC.Exts (build)
 
 type Transform m1 m2 a b = forall c. FoldM m1 b c -> FoldM m2 a c
 type Transform' m a b = Transform m m a b
@@ -54,8 +58,21 @@ scans (FoldM scf scs0 scOut) (FoldM ff s0 fOut) =
         fs' <- ff fs =<< scOut scs'
         return (scs',fs')
 
+{-# INLINE cmap #-}
 cmap :: Monad m => (a -> [b]) -> Transform' m a b
 cmap f = maps f . foldUnfolding unfoldList
+
+{-# INLINE cmap' #-}
+cmap' :: Monad m => (a -> UnfoldM m () b) -> Transform' m a b
+cmap' f (FoldM ff s0 mkOut) = FoldM f' s0 mkOut
+  where
+    {-# INLINE f' #-}
+    f' s a = case f a of
+        (UnfoldM mkUnf uf) -> loop uf (mkUnf ()) s
+    {-# INLINE [0] loop #-}
+    loop uf = \ufS fs -> uf ufS >>= \case
+        Just (b,ufS') -> ff fs b >>= loop uf ufS'
+        Nothing       -> return fs
 
 -- Fold over an unfolding.
 {-# INLINE [1] foldUnfolding #-}
@@ -63,7 +80,8 @@ foldUnfolding :: Monad m => UnfoldM m a b -> FoldM m b c -> FoldM m a c
 foldUnfolding (UnfoldM mkUnf uf) (FoldM f s0 mkOut) =
     FoldM (\s a -> loop2 (mkUnf a) s) s0 mkOut
   where
-    -- INLINE-ing this is a big loss.
+    -- INLINE-ing this is a big loss.  For Streams.  Maybe no longer
+    -- true with Folds?
     loop2 unfState foldState = uf unfState >>= \case
         Just (a, unfState') -> f foldState a >>= loop2 unfState'
         Nothing -> return foldState
@@ -73,3 +91,24 @@ foldUnfolding (SUnfoldM unfS0 mkUnf uf) (FoldM f s0 mkOut) =
     loop2 unfState foldState = uf unfState >>= \case
         Right (a, unfState') -> f foldState a >>= loop2 unfState'
         Left unfState' -> return (unfState',foldState)
+
+{-# INLINE [1] foldCmap #-}
+foldCmap :: Monad m => (a -> [b]) -> Transform' m a b
+foldCmap f (FoldM ff s0 mkOut) = FoldM inner s0 mkOut
+  where
+    {-# INLINE inner #-}
+    inner s a = foldLoop ff (f a) s
+
+-- {-# INLINE [0] foldLoop #-}
+foldLoop :: Monad m => (s -> b -> m s) -> [b] -> s -> m s
+foldLoop ff []     foldState = return foldState
+foldLoop ff (b:bs) foldState = ff foldState b >>= foldLoop ff bs
+
+{-# INLINE foldLoop' #-}
+foldLoop' :: forall m s b. Monad m => (s -> b -> m s) -> (forall x. (b->x->x) -> x -> x) -> s -> m s
+foldLoop' f g0 s0 = g0 (\a g s -> (f s a) >>= g) return (s0)
+
+{-# RULES
+"<iterx>cmap" forall f.  maps f . foldUnfolding unfoldList = foldCmap f
+"<iterx>cmap/build" forall f (g :: forall b. (a->b->b)->b->b) s. foldLoop f (build g) s = foldLoop' f g s
+      #-}

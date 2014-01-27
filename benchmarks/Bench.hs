@@ -7,6 +7,7 @@ import Prelude hiding ((.))
 import Control.Category
 import Control.Monad.Base
 import IterX.Fusion
+import qualified IterX.Fusion.Transforms as Tr
 import IterX.Core
 import IterX.Parser.Binary
 import IterX.IterX
@@ -132,18 +133,31 @@ foldTest3 :: IO Int
 foldTest3 = runFold (foldUnfolding unfoldVec . lmap (+1) $ lmap (*2) sums) gen1
 
 foldTest4 :: IO Int
-foldTest4 = runFold (foldUnfolding unfoldVec . lmap (+1) . filters even $ lmap (*2) sums) gen1
+foldTest4 = runFold (foldUnfolding unfoldVec . lmap (+1) . Tr.filters even $ lmap (*2) sums) gen1
 
 foldTest5 :: IO Int
-foldTest5 = runFold (foldUnfolding unfoldVec $ lmap (+1) $ filters even $ foldVec 2 (count :: FoldM IO (V.Vector Int) Int)) gen1
+foldTest5 = runFold (foldUnfolding unfoldVec $ lmap (+1) $ Tr.filters even $ foldVec 2 (count :: FoldM IO (V.Vector Int) Int)) gen1
 
 foldBind1 =   runFold (initFold p1 ( \st -> lmap (st,) . lmap snd . foldUnfolding unfoldVec $ lmap fromIntegral sums) 0)
 
 foldBindTest :: IO Int
 foldBindTest = foldBind1 bGen
 
+--------------------------------------------------------------
+
+-- this is fast, but it doesn't actually fuse.
 foldCmap :: IO Int
-foldCmap = runFold (foldUnfolding unfoldVec $ cmap (\a -> Prelude.replicate a (a-1)) sums) gen1
+foldCmap = runFold (Tr.foldUnfolding unfoldVec $ Tr.cmap (\a -> Prelude.replicate a (a-1)) sums) gen1
+
+
+-- this appears to fuse completely
+foldCmap' :: IO Int
+foldCmap' = runFold (Tr.foldUnfolding unfoldVec $ Tr.cmap' (\a -> uReplicate a (a-1)) sums) gen1
+
+
+foldCmap'2 :: IO Int
+foldCmap'2 = runFold (Tr.foldUnfolding unfoldVec $ Tr.foldCmap (\a -> Prelude.replicate a (a-1)) sums) gen1
+
 
 listCmap :: Int -> Int -> Int
 listCmap nMax nReps =
@@ -179,7 +193,9 @@ main = defaultMain
       -- , bench "iteratee"  (iterBindTest >>= \x -> x `seq` return ())
       ]
   , bgroup "concatmap"
-      [ bench "foldM"     (foldCmap >>= \x -> x `seq` return ())
+      [ bench "foldM"     (Main.foldCmap   >>= \x -> x `seq` return ())
+      , bench "foldM'"    (foldCmap'  >>= \x -> x `seq` return ())
+      , bench "foldCmap"  (foldCmap'2 >>= \x -> x `seq` return ())
       , bench "listy"   $ whnf (uncurry listCmap) (10,2)
       ]
   ]
