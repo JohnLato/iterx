@@ -63,7 +63,7 @@ cmap :: Monad m => (a -> [b]) -> Transform' m a b
 cmap f = maps f . foldUnfolding unfoldList
 
 {-# INLINE cmap' #-}
-cmap' :: Monad m => (a -> UnfoldM m () b) -> Transform' m a b
+cmap' :: forall m a b. Monad m => (a -> UnfoldM m () b) -> Transform' m a b
 cmap' f (FoldM ff s0 mkOut) = FoldM f' s0 mkOut
   where
     {-# INLINE f' #-}
@@ -92,23 +92,28 @@ foldUnfolding (SUnfoldM unfS0 mkUnf uf) (FoldM f s0 mkOut) =
         Right (a, unfState') -> f foldState a >>= loop2 unfState'
         Left unfState' -> return (unfState',foldState)
 
-{-# INLINE [1] foldCmap #-}
+-- this is a lot of extra work to attempt to work well with foldr/build
+-- fusion.  And the performance still isn't as good as the plain code.
+--
+{-# INLINE foldCmap #-}
 foldCmap :: Monad m => (a -> [b]) -> Transform' m a b
-foldCmap f (FoldM ff s0 mkOut) = FoldM inner s0 mkOut
-  where
-    {-# INLINE inner #-}
-    inner s a = foldLoop ff (f a) s
+foldCmap f (FoldM ff s0 mkOut) = FoldM (\s a -> foldLoop ff (f a) s) s0 mkOut
+  -- where
+    -- {-# INLINE inner #-}
+    -- inner s a = foldLoop ff (f a) s
 
--- {-# INLINE [0] foldLoop #-}
+{-# INLINE [1] foldLoop #-}
 foldLoop :: Monad m => (s -> b -> m s) -> [b] -> s -> m s
-foldLoop ff []     foldState = return foldState
-foldLoop ff (b:bs) foldState = ff foldState b >>= foldLoop ff bs
+foldLoop ff = go
+  where
+    go []     foldState = return foldState
+    go (b:bs) foldState = ff foldState b >>= go bs
 
-{-# INLINE foldLoop' #-}
-foldLoop' :: forall m s b. Monad m => (s -> b -> m s) -> (forall x. (b->x->x) -> x -> x) -> s -> m s
-foldLoop' f g0 s0 = g0 (\a g s -> (f s a) >>= g) return (s0)
+{-# INLINE [0] foldLoop' #-}
+foldLoop' :: (Monad m) => (s -> b -> m s) -> (forall x. (b->x->x) -> x -> x) -> s -> m s
+foldLoop' f g0 s = g0 (\a g s -> (f s a) >>= g) return s
 
 {-# RULES
 "<iterx>cmap" forall f.  maps f . foldUnfolding unfoldList = foldCmap f
-"<iterx>cmap/build" forall f (g :: forall b. (a->b->b)->b->b) s. foldLoop f (build g) s = foldLoop' f g s
+"<iterx>cmap/build" forall f (g :: forall b. (a->b->b)->b->b). foldLoop f (build g) = foldLoop' f g
       #-}

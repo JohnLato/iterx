@@ -156,7 +156,7 @@ foldCmap' = runFold (Tr.foldUnfolding unfoldVec $ Tr.cmap' (\a -> uReplicate a (
 
 
 foldCmap'2 :: IO Int
-foldCmap'2 = runFold (Tr.foldUnfolding unfoldVec $ Tr.foldCmap (\a -> Prelude.replicate a (a-1)) sums) gen1
+foldCmap'2 = runFold (Tr.foldUnfolding unfoldVec $ Tr.foldCmap (\a -> Prelude.map (+1) $ Prelude.replicate a (a-1)) sums) gen1
 
 
 listCmap :: Int -> Int -> Int
