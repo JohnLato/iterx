@@ -143,8 +143,9 @@ dropLoop = loop
       t <- inputReady
       if t then do
           s <- get
-          if olength s >= n then let !(_,!t) = unsafeSplitAt n s in put t
-            else loop n
+          let !curlen = olength s
+          if curlen >= n then let !(_,!t) = unsafeSplitAt n s in put t
+            else put mempty >> (loop $! n - curlen)
         else return ()
 {-# INLINE dropLoop #-}
 
