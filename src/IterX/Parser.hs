@@ -13,6 +13,8 @@ module IterX.Parser (
 , IterX.Parser.head
 , pElem
 , matchElem
+
+, splitChunkAt
 ) where
 
 import IterX.IterX
@@ -124,6 +126,18 @@ take :: (S.Index s ~ Int, IsSequence s, MonoFoldableMonoid s, Monad m)
 take n = cxtFailure "take" $ takeWith n (const True)
 {-# INLINE take #-}
 
+-- | drop up to @n@ elements of input, however the start of
+-- the last chunk is also returned.
+splitChunkAt :: (S.Index s ~ Int, IsSequence s, MonoFoldableMonoid s, Monad m)
+             => Int -> IterX s m s
+splitChunkAt n0 = do
+  s <- get
+  let !n' = max n0 0
+      !curlen = olength s
+  if curlen >= n' then let !(h,!t) = unsafeSplitAt n' s in put t >> return h
+    else splitLoop n'
+{-# INLINE splitChunkAt #-}
+
 -- | drop up to @n@ elements of input.  This will not fail.
 drop :: (S.Index s ~ Int, IsSequence s, MonoFoldableMonoid s, Monad m)
          => Int -> IterX s m ()
@@ -148,6 +162,21 @@ dropLoop = loop
             else put mempty >> (loop $! n - curlen)
         else return ()
 {-# INLINE dropLoop #-}
+
+splitLoop :: (S.Index s ~ Int, IsSequence s, MonoFoldableMonoid s, Monad m)
+         => Int -> IterX s m s
+splitLoop = loop
+  where
+    loop n = do
+      t <- inputReady
+      if t then do
+          s <- get
+          let !curlen = olength s
+          if curlen >= n then let !(h,!t) = unsafeSplitAt n s in put t >> return h
+            else put mempty >> (loop $! n-curlen)
+        else return mempty
+{-# INLINE splitLoop #-}
+
 
 -- | parse a sequence of elements that exactly matches @s@.
 --
