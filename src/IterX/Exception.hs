@@ -1,5 +1,6 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE DeriveDataTypeable        #-}
+{-# LANGUAGE StandaloneDeriving        #-}
 
 {-# OPTIONS -Wall #-}
 
@@ -13,6 +14,11 @@ module IterX.Exception (
   ,TerminateEarly(..)
   ,isTerminateEarly
   ,terminateEarlyHandler
+
+  ,TerminateEarlyStateful(..)
+  ,isTerminateEarlyStateful
+
+  ,isTermination
 
   ,IterFailure(..)
   ,isIterFailure
@@ -62,6 +68,33 @@ isTerminateEarly e = case fromException $ toException e of
 
 terminateEarlyHandler :: Monad m => TerminateEarly -> m Bool
 terminateEarlyHandler _ = return False
+
+-- | The consumer has indicated that it's done, and the generator
+-- should terminate.  Further values may have an effect.
+--
+-- This is used to provide bidirectional communication to a
+-- generator.
+data TerminateEarlyStateful = forall s. (Typeable s, Show s) => TerminateEarlyStateful s String deriving (Typeable)
+
+deriving instance Show TerminateEarlyStateful
+
+instance Exception TerminateEarlyStateful where
+  toException = iExceptionToException
+  fromException = iExceptionFromException
+
+instance IException TerminateEarlyStateful
+
+isTerminateEarlyStateful :: Exception e => e -> Bool
+isTerminateEarlyStateful e = case fromException $ toException e of
+    Just (TerminateEarlyStateful _ _) -> True
+    _                                 -> False
+
+-- | check if the thrown exception is a termination-type
+-- exception.
+isTermination :: Exception e => e -> Bool
+isTermination e =
+    isTerminateEarly e || isTerminateEarlyStateful e
+
 
 -- | The consumer has indicated that there is some sort of problem
 -- and continuation is impossible
