@@ -4,4 +4,5 @@ module IterX.Fusion (
 
 import IterX.Fusion.Fold   as M
 import IterX.Fusion.Transforms   as M
+import IterX.Fusion.Transforms2  as M
 import IterX.Fusion.Unfold as M

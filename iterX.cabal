@@ -20,6 +20,7 @@ library
                        IterX.Exception,
                        IterX.Fusion.Fold,
                        IterX.Fusion.Transforms,
+                       IterX.Fusion.Transforms2,
                        IterX.Fusion.Unfold,
                        IterX.Fusion,
                        IterX.IterX,

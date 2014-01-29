@@ -1,24 +1,31 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 {-# OPTIONS -Wall #-}
 module IterX.Fusion.Transforms (
+Transform,
+Transform',
+
 maps,
 mapsM,
 filters,
 filterMaybe,
 scans,
+mealy,
 
 cmap,
 cmap',
 foldUnfolding,
+
 ) where
 
 import IterX.Fusion.Fold
 import IterX.Fusion.Unfold
 import Data.Profunctor
 import Data.Maybe as Maybe
+import Control.Monad
 
 type Transform m1 m2 a b = forall c. FoldM m1 b c -> FoldM m2 a c
 type Transform' m a b = Transform m m a b
@@ -55,6 +62,16 @@ scans (FoldM scf scs0 scOut) (FoldM ff s0 fOut) =
         scs' <- scf scs a
         fs' <- ff fs =<< scOut scs'
         return (scs',fs')
+
+{-# INLINE [1] mealy #-}
+mealy :: Monad m => (s -> a -> (s,[b])) -> s -> Transform' m a b
+mealy f s0 (FoldM ff fs0 fOut) = FoldM loop (s0,fs0) (fOut . snd)
+  where
+    {-# INLINE [0] loop #-}
+    loop (s,fs) a = do
+        let !(!s',bs) = f s a
+        fs' <- foldM ff fs bs
+        return (s',fs')
 
 {-# INLINE cmap #-}
 cmap :: Monad m => (a -> [b]) -> Transform' m a b
