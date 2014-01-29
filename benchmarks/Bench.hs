@@ -138,10 +138,27 @@ foldTest4 = runFold (foldUnfolding unfoldVec . lmap (+1) . Tr.filters even $ lma
 foldTest5 :: IO Int
 foldTest5 = runFold (foldUnfolding unfoldVec $ lmap (+1) $ Tr.filters even $ foldVec 2 (count :: FoldM IO (V.Vector Int) Int)) gen1
 
-foldBind1 =   runFold (initFold p1 ( \st -> lmap (st,) . lmap snd . foldUnfolding unfoldVec $ lmap fromIntegral sums) 0)
+foldBind1 = runFold (initFold p1 ( \st -> lmap (st,) . lmap snd . foldUnfolding unfoldVec $ lmap fromIntegral sums) 0)
+
+foldBind2 = runFold (delimitFold p1 ( \st -> maps (st,) . maps snd . foldUnfolding unfoldVec $ maps fromIntegral sums) (foldLast 0))
+
+foldBind3 = runFold (delimitFold2 p1 ( \st -> maps (st,) . maps snd . foldUnfolding unfoldVec $ maps fromIntegral sums) (\_ -> foldConst Nothing) (foldLast 0))
+
+foldBind4 = runFold (delimitFold3 p1 ( \st -> maps (st,) . maps snd . foldUnfolding unfoldVec $ maps fromIntegral sums) (\_ -> foldConst Nothing) (foldLast 0))
+
 
 foldBindTest :: IO Int
 foldBindTest = foldBind1 bGen
+
+foldBindTest2 :: IO Int
+foldBindTest2 = foldBind2 bGen
+
+foldBindTest3 :: IO Int
+foldBindTest3 = foldBind3 bGen
+
+foldBindTest4 :: IO Int
+foldBindTest4 = foldBind4 bGen
+
 
 --------------------------------------------------------------
 
@@ -184,7 +201,10 @@ main = defaultMain
       ]
   , bgroup "binds"
       [ bench "generator" (genBindTest >>= \x -> x `seq` return ())
-      , bench "foldM"     (foldBindTest >>= \x -> x `seq` return ())
+      , bench "foldM init"  (foldBindTest >>= \x -> x `seq` return ())
+      , bench "foldM delim" (foldBindTest2 >>= \x -> x `seq` return ())
+      -- , bench "foldM delim2" (foldBindTest3 >>= \x -> x `seq` return ())
+      , bench "foldM delim3" (foldBindTest4 >>= \x -> x `seq` return ())
       , bench "pure vector" $ whnf (pureVecTest) (testVec)
       -- , bench "iteratee"  (iterBindTest >>= \x -> x `seq` return ())
       ]
