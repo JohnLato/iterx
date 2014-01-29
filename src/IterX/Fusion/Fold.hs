@@ -29,6 +29,8 @@ foldFirst,
 foldLast,
 foldConst,
 
+foldIterLeftover,
+
 foldVec,
 initFold,
 delimitFold,
@@ -324,7 +326,7 @@ delimitFold2 iter selFold selStop outfold
 -- only when delimitFold2 is defined.  GHC is doing some CSE or
 -- something that is causing difficulty...
 {-# INLINE [1] delimitFold3 #-}
-delimitFold3 :: ( MonadBase IO m)
+delimitFold3 :: ( Monad m)
              => IterX i m st
              -> (st -> FoldM m i o)
              -> (st -> FoldM m i (Maybe (i,i)))
@@ -361,6 +363,25 @@ delimitFold3 iter selFold selStop outfold
       DoneX s' rest ->
           let theFold = foldCombiner (selFold s') (selStop s')
           in doFold ofold theFold rest
+      FailX _ err -> E.throw $
+          IterFailure $ "<iterx> initFold failure: " ++ err
+
+{-# INLINE [1] foldIterLeftover #-}
+foldIterLeftover :: Monad m
+                 => IterX i m a -> FoldM m i (Maybe (a,i))
+foldIterLeftover iter = FoldM loop StartDelimiter extract
+  where
+    extract (ProcState p) = return $ Just p
+    extract _             = return Nothing
+    {-# INLINE [0] loop #-}
+    loop (ConsumeDelimiter k) i = k i >>= proc
+    loop StartDelimiter i =
+        runIter iter i HasMore failX doneX >>= proc
+    loop p@(ProcState _) _i = return p
+    {-# INLINE [0] proc #-}
+    proc res = case res of
+      MoreX k' -> return $ ConsumeDelimiter k'
+      DoneX s' rest -> return $ ProcState (s',rest)
       FailX _ err -> E.throw $
           IterFailure $ "<iterx> initFold failure: " ++ err
 
