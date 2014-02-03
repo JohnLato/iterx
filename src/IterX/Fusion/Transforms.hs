@@ -14,6 +14,7 @@ filters,
 filterMaybe,
 scans,
 mealy,
+mealyM,
 
 cmap,
 cmap',
@@ -63,15 +64,19 @@ scans (FoldM scf scs0 scOut) (FoldM ff s0 fOut) =
         fs' <- ff fs =<< scOut scs'
         return (scs',fs')
 
-{-# INLINE [1] mealy #-}
-mealy :: Monad m => (s -> a -> (s,[b])) -> s -> Transform' m a b
-mealy f s0 (FoldM ff fs0 fOut) = FoldM loop (s0,fs0) (fOut . snd)
+{-# INLINE [1] mealyM #-}
+mealyM :: Monad m => (s -> a -> m (s,[b])) -> s -> Transform' m a b
+mealyM f s0 (FoldM ff fs0 fOut) = FoldM loop (s0,fs0) (fOut . snd)
   where
     {-# INLINE [0] loop #-}
     loop (s,fs) a = do
-        let !(!s',bs) = f s a
+        (!s',bs) <- f s a
         fs' <- foldM ff fs bs
         return (s',fs')
+
+{-# INLINE mealy #-}
+mealy :: Monad m => (s -> a -> (s,[b])) -> s -> Transform' m a b
+mealy f s0 = mealyM (\s a -> return $ f s a) s0
 
 {-# INLINE cmap #-}
 cmap :: Monad m => (a -> [b]) -> Transform' m a b
