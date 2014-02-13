@@ -20,9 +20,10 @@ import Data.Sequences
 
 import Control.Monad.Reader
 import Control.Monad.State
+import qualified Control.Monad.Catch as E
 
 {-# INLINE tdelimitN #-}
-tdelimitN :: (MonoFoldableMonoid inp, IsSequence inp, Index inp ~ Int, Monad m)
+tdelimitN :: (MonoFoldableMonoid inp, IsSequence inp, Index inp ~ Int, E.MonadCatch m)
           => IterX inp m Int
           -> Transform' m inp inp
 tdelimitN iter f = delimitFold3 iter f1 f2 f3

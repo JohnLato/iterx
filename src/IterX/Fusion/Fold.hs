@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
@@ -42,17 +43,16 @@ import Prelude hiding (id, (.))
 import qualified Prelude as P
 import IterX.Core
 import IterX.IterX
+import IterX.Generators (ExIO)
 import IterX.Exception
 
 import Control.Category
-import qualified Control.Exception.Lifted as E
+import qualified Control.Monad.Catch as E
 import Data.Profunctor
 import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Generic.Mutable as GM
 import Control.Monad
-import Control.Monad.Base
 import Control.Monad.State
-import Control.Monad.Trans.Control
 
 import GHC.IO (unsafeDupablePerformIO)
 import Data.Typeable
@@ -174,7 +174,7 @@ toList = liftFold $ FoldM loop id (return . ($ []))
     loop acc el = return $ acc . (el:)
 
 {-# INLINE [1] foldVec #-}
-foldVec :: (MonadBase IO m, G.Vector v i) => Int -> FoldM m (v i) b -> FoldM m i b
+foldVec :: (MonadIO m, G.Vector v i) => Int -> FoldM m (v i) b -> FoldM m i b
 foldVec n (FoldM ff fs0 fOut)
     | n > 1 = FoldM loop (unsafeDupablePerformIO (GM.unsafeNew n),0,fs0) (fOut . (\(_,_,fs) -> fs))
     | n == 1 = error "TODO: implement for 1"
@@ -183,19 +183,19 @@ foldVec n (FoldM ff fs0 fOut)
     {-# INLINE [0] loop #-}
     loop (v,thisIx,fs) i
         | thisIx == n-1 = do
-            (v',v'2) <- liftBase $ do
+            (v',v'2) <- liftIO $ do
                 GM.unsafeWrite v thisIx i
                 v' <- G.unsafeFreeze v
                 v'2 <- GM.unsafeNew n
                 return (v',v'2)
             fs' <- ff fs v'
             return (v'2,0,fs')
-        | otherwise = liftBase $ do
+        | otherwise = liftIO $ do
             GM.unsafeWrite v thisIx i
             return (v,thisIx+1,fs)
 
 {-# INLINE [1] initFold #-}
-initFold :: (Monad m)
+initFold :: (E.MonadCatch m)
          => IterX i m st -> (st -> FoldM m i o) -> o -> FoldM m i o
 initFold iter sel o0 = FoldM loop (StartDelimiter) extract
   where
@@ -215,11 +215,11 @@ initFold iter sel o0 = FoldM loop (StartDelimiter) extract
           let ifold = sel s'
           fold' <- stepFold ifold rest
           return (ProcState fold')
-      FailX _ err -> E.throw $
+      FailX _ err -> E.throwM $
           IterFailure $ "<iterx> initFold failure: " ++ err
 
 {-# INLINE [1] delimitFold #-}
-delimitFold :: ( MonadBaseControl IO m, Typeable i, Typeable o)
+delimitFold :: ( ExIO m, Typeable i, Typeable o)
             => IterX i m st
             -> (st -> FoldM m i o) -- should throw TerminateEarlyStateful with an (i, o) on completion.
             -> FoldM m o o2
@@ -243,13 +243,13 @@ delimitFold iter selFold outfold
             Just (i',o) -> do
                 ofold' <- stepFold ofold o
                 loop (StartDelimiter,ofold') i'
-            Nothing -> E.throw e'
+            Nothing -> E.throwM e'
 
     {-# INLINE [0] procRes #-}
     procRes ofold res = case res of
       MoreX k' -> return $ (ConsumeDelimiter k', ofold)
       DoneX s' rest -> doFold ofold (selFold s') rest
-      FailX _ err -> E.throw $
+      FailX _ err -> E.throwM $
           IterFailure $ "<iterx> initFold failure: " ++ err
 
 stepFold :: Monad m => FoldM m i o -> i -> m (FoldM m i o)
@@ -283,7 +283,7 @@ foldCombiner (FoldM fff ffs0 ffout) (FoldM ssf sss0 ssout) =
 -- this seems a little less efficient than exception-based
 -- without much time spent optimizing either
 {-# INLINE [1] delimitFold2 #-}
-delimitFold2 :: ( MonadBase IO m)
+delimitFold2 :: ( E.MonadCatch m)
              => IterX i m st
              -> (st -> FoldM m i o)
              -> (st -> FoldM m i (Maybe (i,i)))
@@ -319,14 +319,14 @@ delimitFold2 iter selFold selStop outfold
     procRes ofold res = case res of
       MoreX k' -> return $ (ConsumeDelimiter k', ofold)
       DoneX s' rest -> doFold ofold (selStop s') (selFold s') rest
-      FailX _ err -> E.throw $
+      FailX _ err -> E.throwM $
           IterFailure $ "<iterx> initFold failure: " ++ err
 
 -- this seems better than either earlier delimitFold variant, but
 -- only when delimitFold2 is defined.  GHC is doing some CSE or
 -- something that is causing difficulty...
 {-# INLINE [1] delimitFold3 #-}
-delimitFold3 :: ( Monad m)
+delimitFold3 :: ( E.MonadCatch m)
              => IterX i m st
              -> (st -> FoldM m i o)
              -> (st -> FoldM m i (Maybe (i,i)))
@@ -363,11 +363,11 @@ delimitFold3 iter selFold selStop outfold
       DoneX s' rest ->
           let theFold = foldCombiner (selFold s') (selStop s')
           in doFold ofold theFold rest
-      FailX _ err -> E.throw $
+      FailX _ err -> E.throwM $
           IterFailure $ "<iterx> initFold failure: " ++ err
 
 {-# INLINE [1] foldIterLeftover #-}
-foldIterLeftover :: Monad m
+foldIterLeftover :: E.MonadCatch m
                  => IterX i m a -> FoldM m i (Maybe (a,i))
 foldIterLeftover iter = FoldM loop StartDelimiter extract
   where
@@ -382,6 +382,6 @@ foldIterLeftover iter = FoldM loop StartDelimiter extract
     proc res = case res of
       MoreX k' -> return $ ConsumeDelimiter k'
       DoneX s' rest -> return $ ProcState (s',rest)
-      FailX _ err -> E.throw $
+      FailX _ err -> E.throwM $
           IterFailure $ "<iterx> initFold failure: " ++ err
 
