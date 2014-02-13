@@ -21,7 +21,7 @@ import Data.Sequences
 import Control.Monad.Reader
 import Control.Monad.State
 
-{-# INLINE [1] tdelimitN #-}
+{-# INLINE tdelimitN #-}
 tdelimitN :: (MonoFoldableMonoid inp, IsSequence inp, Index inp ~ Int, Monad m)
           => IterX inp m Int
           -> Transform' m inp inp
@@ -39,3 +39,4 @@ transduceFold t gen = do
     sink <- ask
     let fold = t $ foldingM (\_ o -> sink o) ()
     lift $ runFold_ fold gen
+{-# INLINE transduceFold #-}

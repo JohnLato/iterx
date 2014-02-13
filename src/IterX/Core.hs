@@ -78,6 +78,7 @@ filterG p = local f
     f c e | p e = c e
           | otherwise = return ()
 
+{-# INLINE [1] foldG #-}
 foldG :: Monad m => (s -> e -> m s) -> s -> Producer (StateT s m) e -> m s
 foldG f s0 p = execStateT (runGenT p fs) s0
   where

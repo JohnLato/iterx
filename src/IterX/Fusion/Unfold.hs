@@ -44,7 +44,9 @@ uReplicate n a = UnfoldM (const 0) $ \n' -> if n' < n
 unfoldVec :: (G.Vector v a, Monad m) => UnfoldM m (v a) a
 unfoldVec = UnfoldM mkS f
   where
+    {-# INLINE mkS #-}
     mkS v = (0,G.length v, v)
+    {-# INLINE f #-}
     f (i,n,v) | i < n = return $ Just (G.unsafeIndex v i,(i+1,n,v))
               | otherwise = return Nothing
 

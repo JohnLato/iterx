@@ -27,6 +27,9 @@ import IterX.Fusion.Unfold
 import Data.Profunctor
 import Data.Maybe as Maybe
 import Control.Monad
+import qualified Data.Vector.Generic as G
+
+import GHC.Exts
 
 type Transform m1 m2 a b = forall c. FoldM m1 b c -> FoldM m2 a c
 type Transform' m a b = Transform m m a b
@@ -94,20 +97,40 @@ cmap' f (FoldM ff s0 mkOut) = FoldM f' s0 mkOut
         Just (b,ufS') -> ff fs b >>= loop uf ufS'
         Nothing       -> return fs
 
+{-# INLINE [1] r_foldVec #-}
+r_foldVec :: (G.Vector v a, Monad m) => FoldM m a c -> FoldM m (v a) c
+r_foldVec (FoldM f s0 mkOut) = FoldM loop s0 mkOut
+  where
+    {-# INLINE [0] loop #-}
+    loop s vec = G.foldM' f s vec
+
+{-# RULES "unfoldVec" foldUnfolding unfoldVec = r_foldVec #-}
+
+data SPEC = SPEC | SPEC2
+{-# ANN type SPEC ForceSpecConstr #-}
+
 -- Fold over an unfolding.
-{-# INLINE [1] foldUnfolding #-}
+{-# INLINE foldUnfolding #-}
 foldUnfolding :: Monad m => UnfoldM m a b -> FoldM m b c -> FoldM m a c
 foldUnfolding (UnfoldM mkUnf uf) (FoldM f s0 mkOut) =
-    FoldM (\s a -> loop2 (mkUnf a) s) s0 mkOut
+    FoldM (\s a -> loop1 (mkUnf a) s) s0 mkOut
   where
-    -- INLINE-ing this is a big loss.  For Streams.  Maybe no longer
-    -- true with Folds?
-    loop2 unfState foldState = uf unfState >>= \case
-        Just (a, unfState') -> f foldState a >>= loop2 unfState'
+    {-# INLINE loop1 #-}
+    loop1 unfState foldState = uf unfState >>= \case
+        Just (a, unfState') -> do
+            fs' <- f foldState a
+            us' <- uf unfState
+            loop2 SPEC fs' us'
+        Nothing -> return foldState
+    loop2 !sPEC foldState unfState = case unfState of
+        Just !(!a, unfState') -> do
+            fs' <- f foldState a
+            us' <- uf unfState'
+            loop2 SPEC fs' us'
         Nothing -> return foldState
 foldUnfolding (SUnfoldM unfS0 mkUnf uf) (FoldM f s0 mkOut) =
-    FoldM (\(unfS,s) a -> loop2 (mkUnf unfS a) s) (unfS0,s0) (mkOut.snd)
+    FoldM (\(unfS,s) a -> loop2 SPEC (mkUnf unfS a) s) (unfS0,s0) (mkOut.snd)
   where
-    loop2 unfState foldState = uf unfState >>= \case
-        Right (a, unfState') -> f foldState a >>= loop2 unfState'
+    loop2 !sPEC unfState foldState = uf unfState >>= \case
+        Right (a, unfState') -> f foldState a >>= loop2 SPEC unfState'
         Left unfState' -> return (unfState',foldState)
