@@ -91,7 +91,7 @@ cmap' f (FoldM ff s0 mkOut) = FoldM f' s0 mkOut
   where
     {-# INLINE f' #-}
     f' s a = case f a of
-        (UnfoldM mkUnf uf) -> loop uf (mkUnf ()) s
+        (UnfoldM mkUnf uf) -> mkUnf () >>= \uf' -> loop uf uf' s
     {-# INLINE [0] loop #-}
     loop uf ufS = \fs -> uf ufS >>= \case
         Just (b,ufS') -> ff fs b >>= loop uf ufS'
@@ -104,15 +104,8 @@ data SPEC = SPEC | SPEC2
 {-# INLINE foldUnfolding #-}
 foldUnfolding :: Monad m => UnfoldM m a b -> FoldM m b c -> FoldM m a c
 foldUnfolding (UnfoldM mkUnf uf) (FoldM f s0 mkOut) =
-    FoldM (\s a -> loop1 (mkUnf a) s) s0 mkOut
+    FoldM (\s a -> mkUnf a >>= uf >>= loop2 SPEC s) s0 mkOut
   where
-    {-# INLINE loop1 #-}
-    loop1 unfState foldState = uf unfState >>= \case
-        Just (a, unfState') -> do
-            fs' <- f foldState a
-            us' <- uf unfState
-            loop2 SPEC fs' us'
-        Nothing -> return foldState
     loop2 !sPEC foldState unfState = case unfState of
         Just !(!a, unfState') -> do
             fs' <- f foldState a

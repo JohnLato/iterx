@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 
@@ -20,18 +21,18 @@ import qualified Data.Vector.Generic as G
 -- Unfoldings
 
 data UnfoldM m full a where
-    UnfoldM :: (full -> s) -> (s -> m (Maybe (a,s))) -> UnfoldM m full a
+    UnfoldM :: (full -> m s) -> (s -> m (Maybe (a,s))) -> UnfoldM m full a
     SUnfoldM :: t -> (t -> full -> s) -> (s -> m (Either t (a,s))) -> UnfoldM m full a
 
 {-# INLINE [1] unfoldIdM #-}
 unfoldIdM :: Monad m => UnfoldM m a a
-unfoldIdM = UnfoldM Just $ \x -> case x of
+unfoldIdM = UnfoldM (return . Just) $ \x -> case x of
     Just a  -> return $ Just (a,Nothing)
     Nothing -> return Nothing
 
 {-# INLINE uReplicate #-}
 uReplicate :: Monad m => Int -> a -> UnfoldM m () a
-uReplicate n a = UnfoldM (const 0) $ \n' -> if n' < n
+uReplicate n a = UnfoldM (const $ return 0) $ \n' -> if n' < n
     then return $ Just (a,(n'+1))
     else return Nothing
 
@@ -45,10 +46,11 @@ unfoldVec :: (G.Vector v a, Monad m) => UnfoldM m (v a) a
 unfoldVec = UnfoldM mkS f
   where
     {-# INLINE mkS #-}
-    mkS v = (0,G.length v, v)
+    mkS v = return v
     {-# INLINE f #-}
-    f (i,n,v) | i < n = return $ Just (G.unsafeIndex v i,(i+1,n,v))
-              | otherwise = return Nothing
+    f v | not (G.null v) = let !x = G.unsafeHead v
+                           in return $ Just (x,G.unsafeDrop 1 v)
+        | otherwise = return Nothing
 
 -------------------------------------------------------
 newtype Stepper b = Stepper { _unStepper :: Maybe (b, Stepper b) }
@@ -62,13 +64,13 @@ unfoldVec2 = UnfoldM mkS loop
         let f i | i < G.length v =
                     Stepper $ Just (G.unsafeIndex v i, f (i+1))
                 | otherwise = (Stepper Nothing)
-        in f 0
+        in return $ f 0
     loop (Stepper this) = return this
 ---------------------------------------------------------
 
 {-# INLINE unfoldList #-}
 unfoldList :: Monad m => UnfoldM m [a] a
-unfoldList = UnfoldM id f
+unfoldList = UnfoldM return f
   where
     f (x:xs) = return $ Just (x,xs)
     f []     = return Nothing
