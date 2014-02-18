@@ -5,6 +5,7 @@
 {-# OPTIONS -Wall #-}
 module IterX.Fusion.Unfold (
 UnfoldM(..),
+UnfoldStep(..),
 unfoldIdM,
 
 -- * some common unfoldings
@@ -21,20 +22,25 @@ import qualified Data.Vector.Generic as G
 -- Unfoldings
 
 data UnfoldM m full a where
-    UnfoldM :: (full -> m s) -> (s -> m (Maybe (a,s))) -> UnfoldM m full a
+    UnfoldM :: (full -> m s) -> (s -> m (UnfoldStep a s)) -> UnfoldM m full a
     SUnfoldM :: t -> (t -> full -> s) -> (s -> m (Either t (a,s))) -> UnfoldM m full a
+
+data UnfoldStep a s = UnfoldDone | UnfoldStep !a !s
+
+unfoldDone :: Monad m => m (UnfoldStep a s)
+unfoldDone = return UnfoldDone
 
 {-# INLINE [1] unfoldIdM #-}
 unfoldIdM :: Monad m => UnfoldM m a a
 unfoldIdM = UnfoldM (return . Just) $ \x -> case x of
-    Just a  -> return $ Just (a,Nothing)
-    Nothing -> return Nothing
+    Just a  -> return $ UnfoldStep a Nothing
+    Nothing -> unfoldDone
 
 {-# INLINE uReplicate #-}
 uReplicate :: Monad m => Int -> a -> UnfoldM m () a
 uReplicate n a = UnfoldM (const $ return 0) $ \n' -> if n' < n
-    then return $ Just (a,(n'+1))
-    else return Nothing
+    then return $ UnfoldStep a (n'+1)
+    else unfoldDone
 
 -- this currently performs much better than the closure-based unfolding
 -- except on the transducer tests
@@ -49,8 +55,8 @@ unfoldVec = UnfoldM mkS f
     mkS v = return v
     {-# INLINE f #-}
     f v | not (G.null v) = let !x = G.unsafeHead v
-                           in return $ Just (x,G.unsafeDrop 1 v)
-        | otherwise = return Nothing
+                           in return $ UnfoldStep x (G.unsafeDrop 1 v)
+        | otherwise = unfoldDone
 
 -------------------------------------------------------
 newtype Stepper b = Stepper { _unStepper :: Maybe (b, Stepper b) }
@@ -65,12 +71,14 @@ unfoldVec2 = UnfoldM mkS loop
                     Stepper $ Just (G.unsafeIndex v i, f (i+1))
                 | otherwise = (Stepper Nothing)
         in return $ f 0
-    loop (Stepper this) = return this
+    loop (Stepper this) = case this of
+        Just (a,b) -> return $ UnfoldStep a b
+        Nothing    -> unfoldDone
 ---------------------------------------------------------
 
 {-# INLINE unfoldList #-}
 unfoldList :: Monad m => UnfoldM m [a] a
 unfoldList = UnfoldM return f
   where
-    f (x:xs) = return $ Just (x,xs)
-    f []     = return Nothing
+    f (x:xs) = return $ UnfoldStep x xs
+    f []     = unfoldDone

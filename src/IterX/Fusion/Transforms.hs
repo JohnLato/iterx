@@ -94,8 +94,8 @@ cmap' f (FoldM ff s0 mkOut) = FoldM f' s0 mkOut
         (UnfoldM mkUnf uf) -> mkUnf () >>= \uf' -> loop uf uf' s
     {-# INLINE [0] loop #-}
     loop uf ufS = \fs -> uf ufS >>= \case
-        Just (b,ufS') -> ff fs b >>= loop uf ufS'
-        Nothing       -> return fs
+        UnfoldStep b ufS' -> ff fs b >>= loop uf ufS'
+        UnfoldDone        -> return fs
 
 data SPEC = SPEC | SPEC2
 {-# ANN type SPEC ForceSpecConstr #-}
@@ -107,11 +107,11 @@ foldUnfolding (UnfoldM mkUnf uf) (FoldM f s0 mkOut) =
     FoldM (\s a -> mkUnf a >>= uf >>= loop2 SPEC s) s0 mkOut
   where
     loop2 !sPEC foldState unfState = case unfState of
-        Just !(!a, unfState') -> do
+        UnfoldStep a unfState' -> do
             fs' <- f foldState a
             us' <- uf unfState'
             loop2 SPEC fs' us'
-        Nothing -> return foldState
+        UnfoldDone -> return foldState
 foldUnfolding (SUnfoldM unfS0 mkUnf uf) (FoldM f s0 mkOut) =
     FoldM (\(unfS,s) a -> loop2 SPEC (mkUnf unfS a) s) (unfS0,s0) (mkOut.snd)
   where
