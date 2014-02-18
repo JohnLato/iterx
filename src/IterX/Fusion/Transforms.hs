@@ -93,18 +93,9 @@ cmap' f (FoldM ff s0 mkOut) = FoldM f' s0 mkOut
     f' s a = case f a of
         (UnfoldM mkUnf uf) -> loop uf (mkUnf ()) s
     {-# INLINE [0] loop #-}
-    loop uf = \ufS fs -> uf ufS >>= \case
+    loop uf ufS = \fs -> uf ufS >>= \case
         Just (b,ufS') -> ff fs b >>= loop uf ufS'
         Nothing       -> return fs
-
-{-# INLINE [1] r_foldVec #-}
-r_foldVec :: (G.Vector v a, Monad m) => FoldM m a c -> FoldM m (v a) c
-r_foldVec (FoldM f s0 mkOut) = FoldM loop s0 mkOut
-  where
-    {-# INLINE [0] loop #-}
-    loop s vec = G.foldM' f s vec
-
-{-# RULES "unfoldVec" foldUnfolding unfoldVec = r_foldVec #-}
 
 data SPEC = SPEC | SPEC2
 {-# ANN type SPEC ForceSpecConstr #-}
