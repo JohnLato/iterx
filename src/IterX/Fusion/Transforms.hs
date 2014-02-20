@@ -15,6 +15,8 @@ filterMaybe,
 scans,
 mealy,
 mealyM,
+umealy,
+umealyM,
 
 cmap,
 cmap',
@@ -67,6 +69,28 @@ scans (FoldM scf scs0 scOut) (FoldM ff s0 fOut) =
         fs' <- ff fs =<< scOut scs'
         return (scs',fs')
 
+{-# INLINE umealy #-}
+umealy :: Monad m => (s -> a -> (s,UnfoldM m () b)) -> s -> Transform' m a b
+umealy f s0 = umealyM (\s a -> return $ f s a) s0
+
+{-# INLINE [1] umealyM #-}
+umealyM :: Monad m => (s -> a -> m (s,UnfoldM m () b)) -> s -> Transform' m a b
+umealyM f s0 (FoldM ff fs0 fOut) = FoldM loop (s0,fs0) (fOut . snd)
+  where
+    {-# INLINE [0] loop #-}
+    loop (s,fs) a = do
+        (!s',UnfoldM mkUnf uf) <- f s a
+        uf0 <- mkUnf ()
+        uf1 <- uf uf0
+        let loop2 !sPEC foldState unfState = case unfState of
+                UnfoldStep a unfState' -> do
+                    fs' <- ff foldState a
+                    us' <- uf unfState'
+                    loop2 SPEC fs' us'
+                UnfoldDone -> return foldState
+        fs' <- loop2 SPEC fs uf1
+        return (s',fs')
+
 {-# INLINE [1] mealyM #-}
 mealyM :: Monad m => (s -> a -> m (s,[b])) -> s -> Transform' m a b
 mealyM f s0 (FoldM ff fs0 fOut) = FoldM loop (s0,fs0) (fOut . snd)
@@ -91,21 +115,25 @@ cmap' f (FoldM ff s0 mkOut) = FoldM f' s0 mkOut
   where
     {-# INLINE f' #-}
     f' s a = case f a of
-        (UnfoldM mkUnf uf) -> mkUnf () >>= \uf' -> loop uf uf' s
-    {-# INLINE [0] loop #-}
-    loop uf ufS = \fs -> uf ufS >>= \case
-        UnfoldStep b ufS' -> ff fs b >>= loop uf ufS'
+        (UnfoldM mkUnf uf) -> mkUnf () >>= \uf' -> loop SPEC uf uf' s
+    loop !sPEC uf ufS = \fs -> uf ufS >>= \case
+        UnfoldStep b ufS' -> ff fs b >>= loop SPEC uf ufS'
         UnfoldDone        -> return fs
 
 data SPEC = SPEC | SPEC2
 {-# ANN type SPEC ForceSpecConstr #-}
 
 -- Fold over an unfolding.
-{-# INLINE foldUnfolding #-}
+{-# INLINE [1] foldUnfolding #-}
 foldUnfolding :: Monad m => UnfoldM m a b -> FoldM m b c -> FoldM m a c
 foldUnfolding (UnfoldM mkUnf uf) (FoldM f s0 mkOut) =
-    FoldM (\s a -> mkUnf a >>= uf >>= loop2 SPEC s) s0 mkOut
+    -- FoldM (\s a -> mkUnf a >>= uf >>= loop2 SPEC s) s0 mkOut
+    FoldM loop1 s0 mkOut
   where
+    loop1 s a = do
+        ufs <- mkUnf a
+        ufs' <- uf ufs
+        loop2 SPEC s ufs'
     loop2 !sPEC foldState unfState = case unfState of
         UnfoldStep a unfState' -> do
             fs' <- f foldState a

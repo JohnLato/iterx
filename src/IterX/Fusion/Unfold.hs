@@ -14,6 +14,7 @@ unfoldVec,
 unfoldVec2,
 
 uReplicate,
+unfoldEmpty,
 ) where
 
 import qualified Data.Vector.Generic as G
@@ -42,8 +43,10 @@ uReplicate n a = UnfoldM (const $ return 0) $ \n' -> if n' < n
     then return $ UnfoldStep a (n'+1)
     else unfoldDone
 
+unfoldEmpty :: Monad m => UnfoldM m () a
+unfoldEmpty = UnfoldM (const $ return ()) (const unfoldDone)
+
 -- this currently performs much better than the closure-based unfolding
--- except on the transducer tests
 --
 -- TODO: define something generic using mono-traversable, and maybe
 -- substitute other variants via RULEs.
@@ -54,8 +57,7 @@ unfoldVec = UnfoldM mkS f
     {-# INLINE mkS #-}
     mkS v = return v
     {-# INLINE f #-}
-    f v | not (G.null v) = let !x = G.unsafeHead v
-                           in return $ UnfoldStep x (G.unsafeDrop 1 v)
+    f v | not (G.null v) = return $ UnfoldStep (G.unsafeHead v) (G.unsafeDrop 1 v)
         | otherwise = unfoldDone
 
 -------------------------------------------------------

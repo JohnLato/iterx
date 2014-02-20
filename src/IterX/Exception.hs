@@ -74,9 +74,10 @@ terminateEarlyHandler _ = return False
 --
 -- This is used to provide bidirectional communication to a
 -- generator.
-data TerminateEarlyStateful = forall s. (Typeable s, Show s) => TerminateEarlyStateful s String deriving (Typeable)
+data TerminateEarlyStateful = forall s. TerminateEarlyStateful s String deriving (Typeable)
 
-deriving instance Show TerminateEarlyStateful
+instance Show TerminateEarlyStateful where
+  show (TerminateEarlyStateful _ err) = "(TerminateEarlyStateful: " ++ err ++ ")"
 
 instance Exception TerminateEarlyStateful where
   toException = iExceptionToException

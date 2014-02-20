@@ -36,6 +36,7 @@ import           IterX.Unsafe
 
 import           Control.Applicative
 import           Control.Monad.State
+import qualified Control.Monad.Catch as E
 import           Control.Exception (throw)
 import           Data.MonoTraversable
 import           Data.Monoid

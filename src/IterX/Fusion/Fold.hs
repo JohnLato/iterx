@@ -15,6 +15,7 @@ Folding (..),
 runFold,
 runFold_,
 getFold,
+stepFold,
 
 -- * creating folds
 folding,
@@ -31,10 +32,10 @@ foldLast,
 foldConst,
 
 foldIterLeftover,
+foldFoldable,
 
 foldVec,
 initFold,
-delimitFold,
 delimitFold2,
 delimitFold3,
 ) where
@@ -48,6 +49,7 @@ import IterX.Exception
 
 import Control.Category
 import qualified Control.Monad.Catch as E
+import Data.MonoTraversable
 import Data.Profunctor
 import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Generic.Mutable as GM
@@ -56,6 +58,8 @@ import Control.Monad.State
 
 import GHC.IO (unsafeDupablePerformIO)
 import Data.Typeable
+import Data.Monoid
+import Unsafe.Coerce
 
 --------------------------------------------------------
 
@@ -218,40 +222,6 @@ initFold iter sel o0 = FoldM loop (StartDelimiter) extract
       FailX _ err -> E.throwM $
           IterFailure $ "<iterx> initFold failure: " ++ err
 
-{-# INLINE [1] delimitFold #-}
-delimitFold :: ( ExIO m, Typeable i, Typeable o)
-            => IterX i m st
-            -> (st -> FoldM m i o) -- should throw TerminateEarlyStateful with an (i, o) on completion.
-            -> FoldM m o o2
-            -> FoldM m i o2
-delimitFold iter selFold outfold
-    = FoldM loop (StartDelimiter,outfold) extract
-  where
-    {-# INLINE extract #-}
-    extract (ProcState (FoldM _ s out),FoldM oF oS oOut) =
-        out s >>= oF oS >>= oOut
-    extract (_,FoldM _ oS oOut) = oOut oS
-    {-# INLINE [0] loop #-}
-    loop (ProcState fold,ofold) i = doFold ofold fold i
-    loop (StartDelimiter,ofold) i = runIter iter i HasMore failX doneX >>= procRes ofold
-    loop (ConsumeDelimiter k,ofold) i = k i >>= procRes ofold
-
-    {-# INLINE doFold #-}
-    doFold ofold ifold inp = E.try (stepFold ifold inp) >>= \case
-        Right fold' -> return (ProcState fold',ofold)
-        Left e'@(TerminateEarlyStateful ex _) -> case cast ex of
-            Just (i',o) -> do
-                ofold' <- stepFold ofold o
-                loop (StartDelimiter,ofold') i'
-            Nothing -> E.throwM e'
-
-    {-# INLINE [0] procRes #-}
-    procRes ofold res = case res of
-      MoreX k' -> return $ (ConsumeDelimiter k', ofold)
-      DoneX s' rest -> doFold ofold (selFold s') rest
-      FailX _ err -> E.throwM $
-          IterFailure $ "<iterx> initFold failure: " ++ err
-
 stepFold :: Monad m => FoldM m i o -> i -> m (FoldM m i o)
 stepFold (FoldM f s out) i = do
     s' <- f s i
@@ -384,4 +354,12 @@ foldIterLeftover iter = FoldM loop StartDelimiter extract
       DoneX s' rest -> return $ ProcState (s',rest)
       FailX _ err -> E.throwM $
           IterFailure $ "<iterx> initFold failure: " ++ err
+
+{-# INLINE [1] foldFoldable #-}
+foldFoldable :: (Monad m, MonoFoldable full)
+             => FoldM m (Element full) b -> FoldM m full b
+foldFoldable (FoldM ff fs0 fOut) = FoldM loop fs0 fOut
+  where
+    {-# INLINE [0] loop #-}
+    loop s full = ofoldlM ff s full
 

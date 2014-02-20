@@ -15,11 +15,14 @@ module IterX.Parser (
 , matchElem
 
 , splitChunkAt
+, foldI
+
 ) where
 
 import IterX.IterX
 import IterX.Unsafe
 
+import Control.Monad.Trans (lift)
 import Data.MonoTraversable
 import Data.Monoid
 import Data.Sequences (IsSequence)
@@ -49,6 +52,25 @@ reqSize !n = IterX $ \s st onF onD ->
     then onD s st s
     else reqSize' n s st onF onD
 {-# INLINE reqSize #-}
+
+-- TODO: this can possibly be optimized by re-writing it similar to reqSize.
+-- but when I tried it, didn't make much difference
+{-# INLINE foldI #-}
+foldI n f fs0 = go (max n 0) fs0
+  where
+    go !n fs = do
+      t <- inputReady
+      if t then do
+        s <- get
+        if olength s >= n
+        then let !(h,!t) = unsafeSplitAt n s in do
+              put t
+              lift $ f fs h
+        else do
+              fs' <- lift $ f fs s
+              put mempty
+              go (n-olength s) fs'
+      else return fs
 
 inputReady :: (MonoFoldableMonoid s, Monad m) => IterX s m Bool
 inputReady = IterX $ \s st _onF onD ->
