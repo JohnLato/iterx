@@ -51,6 +51,7 @@ benchmark bench.hs
       base,
       iterX,
       iteratee   >= 0.8.4.2 && < 0.10,
+      mtl,
       profunctors,
       vector,
       transformers-base >= 0.4,

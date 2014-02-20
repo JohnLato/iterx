@@ -20,9 +20,13 @@ import Data.Vector.Unboxed as V
 
 import Criterion
 import Criterion.Main
+import Control.Monad.Identity
 
 v1 :: V.Vector Int
 v1 = V.enumFromN 1 10
+
+ugen1 :: Monad m => UnfoldM m () (V.Vector Int)
+ugen1 = uReplicate 2 v1
 
 -------------------------------------------------------------
 gen1 :: Monad m => Producer m (V.Vector Int)
@@ -140,21 +144,11 @@ foldTest5 = runFold (foldUnfolding unfoldVec $ lmap (+1) $ Tr.filters even $ fol
 
 foldBind1 = runFold (initFold p1 ( \st -> lmap (st,) . lmap snd . foldUnfolding unfoldVec $ lmap fromIntegral sums) 0)
 
-foldBind2 = runFold (delimitFold p1 ( \st -> maps (st,) . maps snd . foldUnfolding unfoldVec $ maps fromIntegral sums) (foldLast 0))
-
-foldBind3 = runFold (delimitFold2 p1 ( \st -> maps (st,) . maps snd . foldUnfolding unfoldVec $ maps fromIntegral sums) (\_ -> foldConst Nothing) (foldLast 0))
-
 foldBind4 = runFold (delimitFold3 p1 ( \st -> maps (st,) . maps snd . foldUnfolding unfoldVec $ maps fromIntegral sums) (\_ -> foldConst Nothing) (foldLast 0))
 
 
 foldBindTest :: IO Int
 foldBindTest = foldBind1 bGen
-
-foldBindTest2 :: IO Int
-foldBindTest2 = foldBind2 bGen
-
-foldBindTest3 :: IO Int
-foldBindTest3 = foldBind3 bGen
 
 foldBindTest4 :: IO Int
 foldBindTest4 = foldBind4 bGen
@@ -171,6 +165,10 @@ foldCmap = runFold (Tr.foldUnfolding unfoldVec $ Tr.cmap (\a -> Prelude.replicat
 foldCmap' :: IO Int
 foldCmap' = runFold (Tr.foldUnfolding unfoldVec $ Tr.cmap' (\a -> uReplicate a (a-1)) sums) gen1
 
+-- this appears to fuse completely more better.  It was good in IO too.
+-- I think this is just plain better than using a Producer.
+foldCmap'2 :: Int -> Int -> Int
+foldCmap'2 nMax nReps = runIdentity $ stepFold (Tr.foldUnfolding (uReplicate nReps $ V.enumFromTo 1 nMax) . Tr.foldUnfolding unfoldVec $ Tr.cmap' (\a -> uReplicate a (a-1)) sums) () >>= getFold
 
 listCmap :: Int -> Int -> Int
 listCmap nMax nReps =
@@ -202,8 +200,6 @@ main = defaultMain
   , bgroup "binds"
       [ bench "generator" (genBindTest >>= \x -> x `seq` return ())
       , bench "foldM init"  (foldBindTest >>= \x -> x `seq` return ())
-      , bench "foldM delim" (foldBindTest2 >>= \x -> x `seq` return ())
-      -- , bench "foldM delim2" (foldBindTest3 >>= \x -> x `seq` return ())
       , bench "foldM delim3" (foldBindTest4 >>= \x -> x `seq` return ())
       , bench "pure vector" $ whnf (pureVecTest) (testVec)
       -- , bench "iteratee"  (iterBindTest >>= \x -> x `seq` return ())
@@ -211,6 +207,7 @@ main = defaultMain
   , bgroup "concatmap"
       [ bench "foldM"     (Main.foldCmap   >>= \x -> x `seq` return ())
       , bench "foldM'"    (foldCmap'  >>= \x -> x `seq` return ())
+      , bench "foldM'2" $ whnf (uncurry foldCmap'2) (10,2)
       , bench "listy"   $ whnf (uncurry listCmap) (10,2)
       ]
   ]
