@@ -16,6 +16,7 @@ runFold,
 runFold_,
 getFold,
 stepFold,
+seqFold,
 
 -- * creating folds
 folding,
@@ -91,6 +92,12 @@ lmapFold lf (FoldM loop s0 mkOut) = FoldM loop' s0 mkOut
     {-# INLINE [0] loop' #-}
     loop' s a = loop s $ lf a
 
+seqFold :: Monad m => m (FoldM m i o) -> FoldM m i o
+seqFold act = FoldM f act (>>= getFold)
+  where
+   f ff a = do
+      theFold <- ff
+      return `liftM` stepFold theFold a
 
 -- -----------------------------------------
 

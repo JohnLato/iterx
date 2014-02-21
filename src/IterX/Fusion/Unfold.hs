@@ -24,7 +24,6 @@ import qualified Data.Vector.Generic as G
 
 data UnfoldM m full a where
     UnfoldM :: (full -> m s) -> (s -> m (UnfoldStep a s)) -> UnfoldM m full a
-    SUnfoldM :: t -> (t -> full -> s) -> (s -> m (Either t (a,s))) -> UnfoldM m full a
 
 data UnfoldStep a s = UnfoldDone | UnfoldStep !a !s
 
@@ -43,6 +42,7 @@ uReplicate n a = UnfoldM (const $ return 0) $ \n' -> if n' < n
     then return $ UnfoldStep a (n'+1)
     else unfoldDone
 
+{-# INLINE unfoldEmpty #-}
 unfoldEmpty :: Monad m => UnfoldM m () a
 unfoldEmpty = UnfoldM (const $ return ()) (const unfoldDone)
 

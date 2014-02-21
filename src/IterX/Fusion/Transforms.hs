@@ -21,7 +21,6 @@ umealyM,
 cmap,
 cmap',
 foldUnfolding,
-
 ) where
 
 import IterX.Fusion.Fold
@@ -140,9 +139,3 @@ foldUnfolding (UnfoldM mkUnf uf) (FoldM f s0 mkOut) =
             us' <- uf unfState'
             loop2 SPEC fs' us'
         UnfoldDone -> return foldState
-foldUnfolding (SUnfoldM unfS0 mkUnf uf) (FoldM f s0 mkOut) =
-    FoldM (\(unfS,s) a -> loop2 SPEC (mkUnf unfS a) s) (unfS0,s0) (mkOut.snd)
-  where
-    loop2 !sPEC unfState foldState = uf unfState >>= \case
-        Right (a, unfState') -> f foldState a >>= loop2 SPEC unfState'
-        Left unfState' -> return (unfState',foldState)
