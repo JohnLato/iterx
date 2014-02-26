@@ -16,6 +16,7 @@ module IterX.Parser (
 
 , splitChunkAt
 , foldI
+, delimitI
 
 ) where
 
@@ -71,6 +72,44 @@ foldI n f fs0 = go (max n 0) fs0
               put mempty
               go (n-olength s) fs'
       else return fs
+
+delimitI :: (Monad m, MonoFoldableMonoid s, IsSequence s, Int ~ S.Index s)
+         => Int -> IterX s m a -> IterX s m a
+delimitI n0 i0 = IterX $ \s st onF onD -> let !n = max 0 n0 in
+    if olength s >= n
+    then let !(h,!t) = unsafeSplitAt n s in do
+              runIter i0 h EOF onF onD >>= \case
+                  DoneX a s   -> return $ DoneX a (s <> t)
+                  MoreX k     -> return $ FailX t "delimitI: not enough data!"
+                  FailX s err -> return $ FailX s err
+    else runIter i0 s HasMore onF onD >>= \case
+        MoreX k -> return $ MoreX (mkK (n-olength s) k)
+        res -> return res
+  where
+    mkK n k s =
+      if olength s >= n
+      then let !(h,!t) = unsafeSplitAt n s
+           in k h >>= \case
+                  DoneX a s' -> return $ DoneX a (s' <> t)
+                  MoreX k    -> return $ FailX t "delimitI: not enough data!"
+                  FailX s' e -> return $ FailX s' e
+      else k s >>= \case
+          MoreX k' -> return $ MoreX (mkK (n-olength s) k')
+          res -> return res
+{-# INLINE delimitI #-}
+
+delimitI' !n0 r0 s st0 onF0 onD0 = undefined
+{-
+    runIter (go r0 n0) s st0 onF0 onD0
+  where
+    go i !n = IterX $ \s st onF onD ->
+        if olength s >= n
+        then onD s st s
+        else runIter (forceAppend >> go n) s st onF onD
+-- we don't want this inline'd, but we do want it type-specialized
+-- {-# INLINE delimitI' #-}
+-}
+
 
 inputReady :: (MonoFoldableMonoid s, Monad m) => IterX s m Bool
 inputReady = IterX $ \s st _onF onD ->

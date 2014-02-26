@@ -81,16 +81,15 @@ delimitFold4 iter selFold outfold = loopIter mainIter outfold
         (n,st) <- iter
         case selFold st of
             FoldM ff fs0 fOut -> IX.foldI n ff fs0 >>= lift . fOut
-    
-{-
-{-# INLINE tdelimitN #-}
-tdelimitN iter f = delimitFold3 iter f1 f2 f3
-  where
-    f1 = const f
-    f2 n = foldIterLeftover (IX.splitChunkAt n)
-    f3 = foldLast (error "<iterx> tdelimitN: no outputs at all!")
-    -}
 
+{- start to work on fusing delimiters.  For this, I need a countConsumed though
+cmb1  iOuter iInner selFold = loopIter mainIter
+  where
+    mainIter = do
+      cntOuter <- iOuter
+      (cntInner,st) <-
+ -}
+    
 transduceFold :: Monad m
               => Transform' m i o
               -> (forall s. Producer (StateT s m) i)

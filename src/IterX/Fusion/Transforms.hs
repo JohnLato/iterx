@@ -21,6 +21,7 @@ umealyM,
 cmap,
 cmap',
 foldUnfolding,
+foldUnfolding2,
 ) where
 
 import IterX.Fusion.Fold
@@ -37,6 +38,13 @@ type Transform' m a b = Transform m m a b
 
 maps :: Monad m => (a -> b) -> Transform' m a b
 maps f = lmap f
+
+{-# RULES
+"<iterx>maps/maps" forall f g. maps f . maps g = maps (g . f)
+"<iterx>lmap/lmap" forall f g. lmap f . lmap g = lmap (g . f)
+"<iterx>unfold2/maps" forall f uf. foldUnfolding2 uf . maps f = foldUnfolding2 ((fmap . fmap) f uf)
+"<iterx>maps/unfold2" forall f uf. maps f . foldUnfolding2 uf = foldUnfolding2 (uf . f)
+     #-}
 
 {-# INLINE [1] mapsM #-}
 mapsM :: Monad m => (a -> m b) -> Transform' m a b
@@ -91,17 +99,17 @@ umealyM f s0 (FoldM ff fs0 fOut) = FoldM loop (s0,fs0) (fOut . snd)
         return (s',fs')
 
 {-# INLINE [1] mealyM #-}
-mealyM :: Monad m => (s -> a -> m (s,[b])) -> s -> Transform' m a b
+mealyM :: Monad m => (s -> a -> m (s,b)) -> s -> Transform' m a b
 mealyM f s0 (FoldM ff fs0 fOut) = FoldM loop (s0,fs0) (fOut . snd)
   where
     {-# INLINE [0] loop #-}
     loop (s,fs) a = do
         (!s',bs) <- f s a
-        fs' <- foldM ff fs bs
+        fs' <- ff fs bs
         return (s',fs')
 
 {-# INLINE mealy #-}
-mealy :: Monad m => (s -> a -> (s,[b])) -> s -> Transform' m a b
+mealy :: Monad m => (s -> a -> (s,b)) -> s -> Transform' m a b
 mealy f s0 = mealyM (\s a -> return $ f s a) s0
 
 {-# INLINE cmap #-}
@@ -126,7 +134,6 @@ data SPEC = SPEC | SPEC2
 {-# INLINE [1] foldUnfolding #-}
 foldUnfolding :: Monad m => UnfoldM m a b -> FoldM m b c -> FoldM m a c
 foldUnfolding (UnfoldM mkUnf uf) (FoldM f s0 mkOut) =
-    -- FoldM (\s a -> mkUnf a >>= uf >>= loop2 SPEC s) s0 mkOut
     FoldM loop1 s0 mkOut
   where
     loop1 s a = do
@@ -139,3 +146,20 @@ foldUnfolding (UnfoldM mkUnf uf) (FoldM f s0 mkOut) =
             us' <- uf unfState'
             loop2 SPEC fs' us'
         UnfoldDone -> return foldState
+
+-- Fold over an unfolding.
+{-# INLINE [1] foldUnfolding2 #-}
+foldUnfolding2 :: Monad m => (a -> Unfold2 m b) -> FoldM m b c -> FoldM m a c
+foldUnfolding2 mkUnf (FoldM f s0 mkOut) =
+    FoldM loop1 s0 mkOut
+  where
+    loop1 s a = case mkUnf a of
+        (Unfold2 ufs0 uf) -> do
+            ufs <- uf ufs0
+            let loop2 !sPEC foldState unfState = case unfState of
+                        UnfoldStep a unfState' -> do
+                            fs' <- f foldState a
+                            us' <- uf unfState'
+                            loop2 SPEC fs' us'
+                        UnfoldDone -> return foldState
+            loop2 SPEC s ufs
