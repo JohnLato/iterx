@@ -22,6 +22,10 @@ cmap,
 cmap',
 foldUnfolding,
 foldUnfolding2,
+foldUnfolding2a,
+
+foldU',
+SPEC(..),
 ) where
 
 import IterX.Fusion.Fold
@@ -163,3 +167,21 @@ foldUnfolding2 mkUnf (FoldM f s0 mkOut) =
                             loop2 SPEC fs' us'
                         UnfoldDone -> return foldState
             loop2 SPEC s ufs
+
+-- Fold over an unfolding.
+{-# INLINE foldUnfolding2a #-}
+foldUnfolding2a :: Monad m => FoldM m a c -> FoldM m (Unfold2 m a) c
+foldUnfolding2a (FoldM f s0 mkOut) =
+    FoldM (foldU' f) s0 mkOut
+
+{-# INLINE [1] foldU' #-}
+foldU' :: Monad m => (s -> a -> m s) -> s -> Unfold2 m a -> m s
+foldU' fFunc fState0 (Unfold2 unfState0 uf) = loop SPEC fState0 unfState0
+  where
+    loop !sPEC fState unfState = do
+        r <- uf unfState
+        case r of
+            UnfoldStep a unfState' -> do
+                fs' <- fFunc fState a
+                loop SPEC fs' unfState'
+            UnfoldDone -> return fState

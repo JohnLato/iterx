@@ -78,12 +78,12 @@ unfoldVec = UnfoldM mkS f
     f v | not (G.null v) = return $ UnfoldStep (G.unsafeHead v) (G.unsafeDrop 1 v)
         | otherwise = unfoldDone
 
-{-# INLINE unfold2Vec #-}
+{-# INLINE [1] unfold2Vec #-}
 unfold2Vec :: (G.Vector v a, Monad m) => v a -> Unfold2 m a
 unfold2Vec vec = Unfold2 0 f
   where
     l = G.length vec
-    {-# INLINE f #-}
+    {-# INLINE [0] f #-}
     f ix | (ix < l)  = return $ UnfoldStep (G.unsafeIndex vec ix) (ix+1)
          | otherwise = unfoldDone
 
