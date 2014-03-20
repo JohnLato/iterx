@@ -53,6 +53,8 @@ maps f = lmap f
 "<iterx>lmap/lmap" forall f g. lmap f . lmap g = lmap (g . f)
 "<iterx>unfold2/maps" forall f uf. foldUnfolding2 uf . maps f = foldUnfolding2 ((fmap . fmap) f uf)
 "<iterx>maps/unfold2" forall f uf. maps f . foldUnfolding2 uf = foldUnfolding2 (uf . f)
+"<iterx>maps/unfolding" forall f g uf. maps f (unfolding uf g) = unfolding (uf . f) g
+"<iterx>lower unfoldingM" forall u f. unfoldingM u f = unfolding u f
      #-}
 
 {-# INLINE [1] mapsM #-}
