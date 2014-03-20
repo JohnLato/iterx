@@ -10,6 +10,7 @@
 module IterX.Fusion.Fold (
 FoldM (..),
 Folding (..),
+rmapFoldM,
 
 -- * running folds
 runFold,
@@ -91,6 +92,10 @@ lmapFold lf (FoldM loop s0 mkOut) = FoldM loop' s0 mkOut
   where
     {-# INLINE [0] loop' #-}
     loop' s a = loop s $ lf a
+
+{-# INLINE [1] rmapFoldM #-}
+rmapFoldM :: Monad m => (b->m c) -> FoldM m a b -> FoldM m a c
+rmapFoldM rf (FoldM f s0 mkOut) = FoldM f s0 (mkOut >=> rf)
 
 seqFold :: Monad m => m (FoldM m i o) -> FoldM m i o
 seqFold act = FoldM f act (>>= getFold)

@@ -1,6 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 {-# OPTIONS -Wall #-}
@@ -23,7 +24,10 @@ cmap',
 foldUnfolding,
 foldUnfolding2,
 foldUnfolding2a,
+unfolding,
+unfoldingM,
 
+liftInner,
 foldU',
 SPEC(..),
 ) where
@@ -33,6 +37,7 @@ import IterX.Fusion.Unfold
 import Data.Profunctor
 import Data.Maybe as Maybe
 import Control.Monad
+import Data.Functor.Identity
 import qualified Data.Vector.Generic as G
 
 import GHC.Exts
@@ -150,6 +155,22 @@ foldUnfolding (UnfoldM mkUnf uf) (FoldM f s0 mkOut) =
             us' <- uf unfState'
             loop2 SPEC fs' us'
         UnfoldDone -> return foldState
+
+{-# INLINE [1] liftInner #-}
+liftInner :: (forall x. g x -> h x) -> FoldM g a b -> FoldM h a b
+liftInner mX (FoldM f s0 mkOut) =
+    FoldM (\s a -> mX $ f s a) s0 (mX . mkOut)
+
+{-# INLINE [1] unfolding #-}
+unfolding :: Monad m => (a -> Unfold2 Identity b) -> FoldM Identity b c -> FoldM m a c
+unfolding unf (FoldM f s0 mkOut) = rmapFoldM mkOut' $ folding (\s v -> runIdentity $ stepFold (foldUnfolding2 unf (foldingM f s)) v >>= getFold) s0
+  where
+    mkOut' = return . runIdentity . mkOut
+
+{-# INLINE [1] unfoldingM #-}
+unfoldingM :: Monad m => (a -> Unfold2 m b) -> FoldM m b c -> FoldM m a c
+unfoldingM unf (FoldM f s0 mkOut) = rmapFoldM mkOut $ foldingM (\s v -> stepFold (foldUnfolding2 unf (foldingM f s)) v >>= getFold) s0
+
 
 -- Fold over an unfolding.
 {-# INLINE [1] foldUnfolding2 #-}
