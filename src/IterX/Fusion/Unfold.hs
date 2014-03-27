@@ -11,6 +11,8 @@ unfoldIdM,
 
 Unfold2(..),
 unfold2Vec,
+unfold2Id,
+unfold2Empty,
 
 -- * some common unfoldings
 unfoldList,
@@ -86,6 +88,18 @@ unfold2Vec vec = Unfold2 0 f
     {-# INLINE [0] f #-}
     f ix | (ix < l)  = return $ UnfoldStep (G.unsafeIndex vec ix) (ix+1)
          | otherwise = unfoldDone
+
+{-# INLINE [1] unfold2Id #-}
+unfold2Id :: Monad m => a -> Unfold2 m a
+unfold2Id a = Unfold2 0 f
+  where
+    {-# INLINE [0] f #-}
+    f ix | ix == 0   = return $ UnfoldStep a (ix+1)
+         | otherwise = unfoldDone
+
+{-# INLINE [1] unfold2Empty #-}
+unfold2Empty :: Monad m => Unfold2 m a
+unfold2Empty = Unfold2 () (const unfoldDone)
 
 -------------------------------------------------------
 newtype Stepper b = Stepper { _unStepper :: Maybe (b, Stepper b) }

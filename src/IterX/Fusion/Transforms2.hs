@@ -57,13 +57,14 @@ loopIter iter (FoldM ff fs0 fOut) =
         MoreX k -> return (k,fs)
         DoneX r rest -> do
             fs' <- ff fs r
-            loop2 (s0,fs') rest
+            loop2 SPEC (s0,fs') rest
         FailX _ err  -> E.throwM $ IterFailure err
-    loop2 (s,fs) a = s a >>= \case
+    -- SpecConstr isn't really important here for the most part, I think
+    loop2 !sPEC (s,fs) a = s a >>= \case
         MoreX k -> return (k,fs)
         DoneX r rest -> do
             fs' <- ff fs r
-            loop2 (s0,fs') rest
+            loop2 SPEC (s0,fs') rest
         FailX _ err  -> E.throwM $ IterFailure err
     s0 = \s -> runIter iter s HasMore failX doneX
 

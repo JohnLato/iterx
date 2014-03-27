@@ -64,7 +64,7 @@ foldI n f fs0 = go (max n 0) fs0
       if t then do
         s <- get
         if olength s >= n
-        then let !(h,!t) = unsafeSplitAt n s in do
+        then let !(h,t) = unsafeSplitAt n s in do
               put t
               lift $ f fs h
         else do

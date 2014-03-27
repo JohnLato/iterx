@@ -121,7 +121,7 @@ mealyM f s0 (FoldM ff fs0 fOut) = FoldM loop (s0,fs0) (fOut . snd)
 
 {-# INLINE mealy #-}
 mealy :: Monad m => (s -> a -> (s,b)) -> s -> Transform' m a b
-mealy f s0 = mealyM (\s a -> return $ f s a) s0
+mealy f s0 = mealyM (\s a -> return (f s a)) s0
 
 {-# INLINE cmap #-}
 cmap :: Monad m => (a -> [b]) -> Transform' m a b
