@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                       #-}
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE FlexibleContexts          #-}
 
@@ -18,7 +19,11 @@ import           System.IO
 import           Control.Monad.Trans
 import           Control.Monad.Catch
 
+#if MIN_VERSION_exceptions(0,6,0)
+type ExIO m = (MonadMask m, MonadIO m)
+#else
 type ExIO m = (MonadCatch m, MonadIO m)
+#endif
 
 {-# INLINE yieldFileChunks #-}
 yieldFileChunks :: (ExIO m, ReadableChunk s)
